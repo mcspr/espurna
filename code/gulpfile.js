@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // -----------------------------------------------------------------------------
 
 const fs = require('fs');
+const path = require('path');
 const gulp = require('gulp');
 const htmlmin = require('gulp-htmlmin');
 const uglify = require('gulp-uglify');
@@ -42,6 +43,7 @@ const remover = require('gulp-remove-code');
 const map = require('map-stream');
 const rename = require('gulp-rename');
 const runSequence = require('run-sequence');
+const options = require('commander');
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -49,6 +51,27 @@ const runSequence = require('run-sequence');
 
 const dataFolder = 'espurna/data/';
 const staticFolder = 'espurna/static/';
+
+const webuiModules = [
+    'all',
+    'small',
+    'sensor',
+    'rfbridge',
+    'light'
+];
+
+const webuiFiles = webuiModules.map(function(module) {
+    return path.join(dataFolder, 'index.' + module + '.html.gz');
+});
+
+const webuiHeaders = webuiModules.map(function(module) {
+    return path.join(staticFolder, 'index.' + module + '.html.gz.h');
+});
+
+options
+    .allowUnknownOption()
+    .option('-m, --module [' + webuiModules.join(',') + ']', 'WebUI module', null)
+    .parse(process.argv);
 
 // -----------------------------------------------------------------------------
 // Methods
@@ -65,7 +88,7 @@ var buildHeaderFile = function() {
 
         var parts = file.path.split("/");
         var filename = parts[parts.length - 1];
-        var destination = staticFolder + filename + ".h";
+        var destination = path.join(staticFolder, filename + '.h');
         var safename = "webui_image";
 
         var wstream = fs.createWriteStream(destination);
@@ -171,38 +194,27 @@ gulp.task('csslint', function() {
         pipe(csslint.formatter());
 });
 
-gulp.task('build_webui_small', function() {
-    return buildWebUI("small");
-})
-
-gulp.task('build_webui_sensor', function() {
-    return buildWebUI("sensor");
-})
-
-gulp.task('build_webui_light', function() {
-    return buildWebUI("light");
-})
-
-gulp.task('build_webui_rfbridge', function() {
-    return buildWebUI("rfbridge");
-})
-
-gulp.task('build_webui_all', function() {
-    return buildWebUI("all");
-})
+webuiModules.map(function(module) {
+    gulp.task('build_webui_' + module, () => buildWebUI(module));
+});
 
 gulp.task('buildfs_inline', function(cb) {
-    runSequence([
-        'build_webui_small',
-        'build_webui_sensor',
-        'build_webui_light',
-        'build_webui_rfbridge',
-        'build_webui_all'
-    ], cb);
+    if (options.module !== null) {
+        gulp.start('build_webui_' + options.module);
+        cb(null);
+        return;
+    }
+
+    runSequence(webuiModules.map((module) => 'build_webui_' + module), cb);
 });
 
 gulp.task('buildfs_embeded', ['buildfs_inline'], function() {
-    gulp.src(dataFolder + 'index.*').
+    var source = webuiFiles;
+    if (options.module !== null) {
+        source = path.join(dataFolder, 'index.' + options.module + '.html.gz');
+    }
+
+    gulp.src(source).
         pipe(buildHeaderFile());
 });
 
