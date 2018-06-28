@@ -43,16 +43,24 @@ environments=$@
 # Environments to build
 if [ $# -eq 0 ]; then
 
-    environments=$available
+    # Hook to build specific environents when using CI
+    if [[ "${CI}" = true ]] ; then
+        if  [[ "${TRAVIS_BUILD_STAGE_NAME}" = "Builder" ]]; then
+            environments=$available
+        fi
 
-    # Hook to build travis test envs
-    if [[ "${TRAVIS_BRANCH}" != "" ]]; then
-        re='^[0-9]+\.[0-9]+\.[0-9]+$'
-        if ! [[ ${TRAVIS_BRANCH} =~ $re ]]; then
+        if [[ "${TRAVIS_BUILD_STAGE_NAME}" = "Test" ]]; then
             environments=$travis
         fi
+    else
+        environments=$available
     fi
 
+fi
+
+if [[ -z "${environments}" ]] ; then
+    echo "Nothing to build"
+    exit
 fi
 
 # Get current version
@@ -85,12 +93,15 @@ echo "--------------------------------------------------------------"
 echo "Building firmware images..."
 mkdir -p ../firmware/espurna-$version
 if [ ${par_build} ]; then
-    to_build=$(echo ${environments} | awk -v par_thread=${par_thread} -v par_total_threads=${par_total_threads} '{ for (i = 1; i <= NF; i++) if (++j % par_total_threads == par_thread ) print $i; }')
+    to_build=$(echo ${environments} | \
+        awk -v par_thread=${par_thread} -v par_total_threads=${par_total_threads} \
+        '{ for (i = 1; i <= NF; i++) if (++j % par_total_threads == par_thread ) print $i; }')
 else
     to_build=${environments}
 fi
 
-for environment in $to_build; do    echo "* espurna-$version-$environment.bin"
+for environment in $to_build; do
+    echo "* espurna-$version-$environment.bin"
     platformio run --silent --environment $environment || exit 1
     mv .pioenvs/$environment/firmware.bin ../firmware/espurna-$version/espurna-$version-$environment.bin
 done

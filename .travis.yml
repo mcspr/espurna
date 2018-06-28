@@ -11,13 +11,21 @@ install:
 - pip install -U platformio
 - cd code ; npm install --only=dev ; cd ..
 env:
-    global:
-        - BUILDER_TOTAL_THREADS=4
-    matrix:
-        - BUILDER_THREAD=0
-        - BUILDER_THREAD=1
-        - BUILDER_THREAD=2
-        - BUILDER_THREAD=3
+  global:
+  - BUILDER_TOTAL_THREADS=4
+stages:
+- name: Test
+- name: Builder
+  if: tag IS present
+jobs:
+  include:
+  - stage: Test
+    script: cd code && ./build.sh
+  - stage: Builder
+    env: BUILDER_THREAD=0
+  - env: BUILDER_THREAD=1
+  - env: BUILDER_THREAD=2
+  - env: BUILDER_THREAD=3
 script:
 - cd code && ./build.sh -p &&  cd ..
 before_deploy:
@@ -30,8 +38,10 @@ deploy:
   file: firmware/espurna-*.bin
   skip_cleanup: true
   on:
-    all_branches: true
     tags: true
+    branch: master
+    repo: xoseperez/espurna
+    condition: $TRAVIS_BUILD_STAGE_NAME = Builder
 notifications:
   pushover:
     api_key:
