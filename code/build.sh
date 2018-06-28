@@ -45,12 +45,9 @@ if [ $# -eq 0 ]; then
 
     environments=$available
 
-    # Hook to build travis test envs
-    if [[ "${TRAVIS_BRANCH}" != "" ]]; then
-        re='^[0-9]+\.[0-9]+\.[0-9]+$'
-        if ! [[ ${TRAVIS_BRANCH} =~ $re ]]; then
-            environments=$travis
-        fi
+    # Hook to build travis test envs instead of available
+    if [[ "${TRAVIS_STAGE_NAME}" == "test" ]]; then
+        environments=$travis
     fi
 
 fi
@@ -85,7 +82,9 @@ echo "--------------------------------------------------------------"
 echo "Building firmware images..."
 mkdir -p ../firmware/espurna-$version
 if [ ${par_build} ]; then
-    to_build=$(echo ${environments} | awk -v par_thread=${par_thread} -v par_total_threads=${par_total_threads} '{ for (i = 1; i <= NF; i++) if (++j % par_total_threads == par_thread ) print $i; }')
+    to_build=$(echo ${environments} | \
+        awk -v par_thread=${par_thread} -v par_total_threads=${par_total_threads} \
+        '{ for (i = 1; i <= NF; i++) if (++j % par_total_threads == par_thread ) print $i; }')
 else
     to_build=${environments}
 fi
