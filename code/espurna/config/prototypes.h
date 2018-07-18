@@ -14,11 +14,16 @@ extern "C" {
     typedef std::function<void(char *, size_t)> api_get_callback_f;
     typedef std::function<void(const char *)> api_put_callback_f;
     typedef std::function<void(JsonObject&)> json_api_get_callback_f;
-    typedef std::function<void(const char *, JsonObject&)> json_api_put_callback_f;
+    typedef std::function<void(JsonObject&, JsonObject&)> json_api_put_callback_f;
+    typedef std::function<void(void)> api_action_callback_f;
     void apiRegister(const char * key, api_get_callback_f getFn, api_put_callback_f putFn = NULL);
+    void apiRegister(const char * key, json_api_get_callback_f getFn, json_api_put_callback_f putFn = NULL);
 #else
     #define api_get_callback_f void *
     #define api_put_callback_f void *
+    #define api_action_callback_f void *
+    #define json_api_get_callback_f void *
+    #define json_api_put_callback_f void *
 #endif
 
 // -----------------------------------------------------------------------------

@@ -22,6 +22,12 @@ typedef struct {
 std::vector<web_api_t> _apis;
 
 typedef struct {
+    char * name;
+    api_action_callback_f callbackFn = NULL;
+} web_api_action_t;
+std::vector<web_api_action_t> _api_actions;
+
+typedef struct {
     char * key;
     json_api_get_callback_f getFn = NULL;
     json_api_put_callback_f putFn = NULL;
@@ -124,11 +130,43 @@ ArRequestHandlerFunction _bindAPI(unsigned int apiID) {
 
 }
 
-ArRequestHandlerFunction _bindJsonAPI(unsigned int apiID) {
+bool _validateJsonAPIRequest(AsyncWebServerRequest *request) {
+    if (getSetting("apiEnabled", API_ENABLED).toInt() == 0) {
+        DEBUG_MSG_P(PSTR("[WEBSERVER] HTTP JSON API is not enabled\n"));
+        request->send(403); // Forbiddden
+        return false;
+    }
+
+    if (!_asJson(request)) {
+        request->send(400);
+        return false;
+    }
+
+    if (!request->hasHeader(F("Authorization"))) {
+        request->send(400);
+        return false;
+    }
+
+    // Authorization: token <apiKey value>
+    AsyncWebHeader* auth = request->getHeader(F("Authorization"));
+    String value = auth->value();
+    if (!value.substring(6).equals(getSetting("apiKey"))) {
+        request->send(403);
+        return false;
+    }
+
+    return true;
+}
+
+
+ArRequestHandlerFunction _bindJsonAPIGet(unsigned int apiID) {
     return [apiID](AsyncWebServerRequest *request) {
         webLog(request);
-        if (!_authAPI(request)) { return; }
-        if (!_asJson(request)) { return; }
+        if (!_validateJsonAPIRequest(request)) return;
+        if (request->method() == HTTP_PUT) {
+            // WAIT FOR BODY
+            return;
+        }
 
         web_json_api_t api = _json_apis[apiID];
 
@@ -144,22 +182,64 @@ ArRequestHandlerFunction _bindJsonAPI(unsigned int apiID) {
             return;
         }
 
-        if (request->method() == HTTP_PUT) {
-            if (!request->hasParam("value", true)) {
-                root.set("error", F("Missing \"value\" parameter"));
-                response->setCode(400); // Bad request
-            } else {
-                AsyncWebParameter* p = request->getParam("value", true);
-                (api.putFn)((p->value()).c_str(), root);
-            }
+        request->send(405); // Method not allowed
+    };
+}
 
+ArRequestHandlerFunction _bindJsonAPIPut(unsigned int apiID) {
+    return [apiID](AsyncWebServerRequest *request) {
+        webLog(request);
+        if (!_validateJsonAPIRequest(request)) return;
+
+        AsyncJsonResponse *response = new AsyncJsonResponse();
+        JsonObject& response_root = response->getRoot();
+
+        // No content-type set or zero length body
+        if (!request->_tempObject) {
+            response_root.set("error", F("No data"));
+            response->setCode(400); // Bad request
             response->setLength();
             request->send(response);
-
             return;
         }
 
-        request->send(405); // Method not allowed
+        const char *buffer = (const char*)request->_tempObject;
+        DynamicJsonBuffer jsonBuffer;
+        JsonObject& request_root = jsonBuffer.parseObject(buffer);
+        if (!request_root.success()) {
+            response_root.set("error", F("Cannot parse json data"));
+            response->setCode(400);
+            response->setLength();
+            request->send(response);
+            return;
+        }
+
+        web_json_api_t api = _json_apis[apiID];
+
+        (api.putFn)(request_root, response_root);
+        if (response_root.containsKey("error")) {
+            response->setCode(400);
+        }
+
+        response->setLength();
+        request->send(response);
+    };
+}
+
+ArBodyHandlerFunction _bindJsonAPIPutBody(unsigned int apiID) {
+    return [apiID](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DEBUG_MSG_P(PSTR("Handling PUT JSON api body\n"));
+        if (!_validateJsonAPIRequest(request)) return;
+
+        if (index == 0) {
+            request->_tempObject = new char[total + 1];
+        }
+
+        char *buffer = (char *) request->_tempObject + index;
+        memcpy(buffer, data, len);
+        if ((index + len) == total) {
+            ((char *)request->_tempObject)[total] = '\0';
+        }
     };
 }
 
@@ -196,6 +276,30 @@ void _onAPIs(AsyncWebServerRequest *request) {
         request->send(200, "text/plain", output);
     }
 
+}
+
+void _listJsonRPCActions(JsonObject& response) {
+    JsonArray& array = response.createNestedArray("actions");
+    for (unsigned int i=0; i < _api_actions.size(); i++) {
+        array.add(_api_actions[i].name);
+    }
+}
+
+void _handleJsonRPCAction(JsonObject& request, JsonObject& response) {
+    if (request.containsKey("action")) {
+        String action = request.get<String>("action");
+        DEBUG_MSG_P(PSTR("[RPC] Action: %s\n"), action.c_str());
+
+        for (unsigned int i=0; i < _api_actions.size(); i++) {
+            if (action.equals(_api_actions[i].name)) {
+                (_api_actions[i].callbackFn)();
+                response.set("result", "success");
+                return;
+            }
+        }
+    }
+
+    response.set("error", "no matching action");
 }
 
 void _onRPC(AsyncWebServerRequest *request) {
@@ -252,17 +356,30 @@ void apiRegister(const char * key, json_api_get_callback_f getFn, json_api_put_c
     api.putFn = putFn;
     _json_apis.push_back(api);
 
-    unsigned int methods = HTTP_GET;
-    if (putFn != NULL) methods += HTTP_PUT;
-    webServer()->on(buffer, methods, _bindJsonAPI(_json_apis.size() - 1));
+    unsigned int idx = _json_apis.size() - 1;
+
+    webServer()->on(buffer, HTTP_GET, _bindJsonAPIGet(idx));
+    if (putFn != NULL) {
+        webServer()->on(buffer, HTTP_PUT, _bindJsonAPIPut(idx), NULL, _bindJsonAPIPutBody(idx));
+    }
+}
+
+void apiRegisterAction(const char * name, api_action_callback_f callbackFn) {
+    web_api_action_t action;
+    action.name = strdup(name);
+    action.callbackFn = callbackFn;
+    _api_actions.push_back(action);
 }
 
 void apiSetup() {
     webServer()->on("/apis", HTTP_GET, _onAPIs);
-    webServer()->on("/rpc", HTTP_GET, _onRPC);
+    //webServer()->on("/rpc", HTTP_GET, _onRPC);
 
     apiRegister("device", info_device, NULL);
     apiRegister("status", info_status, NULL);
+
+    apiRegisterAction("reboot", [](void) { deferredReset(1000, CUSTOM_RESET_RPC); });
+    apiRegister("rpc", _listJsonRPCActions, _handleJsonRPCAction);
 
     wsOnSendRegister(_apiWebSocketOnSend);
     wsOnReceiveRegister(_apiWebSocketOnReceive);
