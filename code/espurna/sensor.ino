@@ -249,14 +249,14 @@ void _sensorAPISetup() {
             dtostrf(value, 1-len, decimals, buffer);
         });
 
-        String jsonTopic = String("magnitudes/") + topic;
+        String jsonTopic = String("_/magnitudes/") + topic;
         apiRegister(jsonTopic.c_str(), [magnitude_id](JsonObject& response) {
             _sensorGetMagnitude(magnitude_id, response);
         });
 
     }
 
-    apiRegister("magnitudes", _sensorGetMagnitudes, NULL);
+    apiRegister("_/magnitudes", _sensorGetMagnitudes, NULL);
 
 }
 #endif

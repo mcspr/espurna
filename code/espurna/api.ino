@@ -373,13 +373,13 @@ void apiRegisterAction(const char * name, api_action_callback_f callbackFn) {
 
 void apiSetup() {
     webServer()->on("/apis", HTTP_GET, _onAPIs);
-    //webServer()->on("/rpc", HTTP_GET, _onRPC);
+    webServer()->on("/rpc", HTTP_GET, _onRPC);
 
-    apiRegister("device", info_device, NULL);
-    apiRegister("status", info_status, NULL);
+    apiRegister("_/device", info_device, NULL);
+    apiRegister("_/status", info_status, NULL);
 
     apiRegisterAction("reboot", [](void) { deferredReset(1000, CUSTOM_RESET_RPC); });
-    apiRegister("rpc", _listJsonRPCActions, _handleJsonRPCAction);
+    apiRegister("_/rpc", _listJsonRPCActions, _handleJsonRPCAction);
 
     wsOnSendRegister(_apiWebSocketOnSend);
     wsOnReceiveRegister(_apiWebSocketOnReceive);
