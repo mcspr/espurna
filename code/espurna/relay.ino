@@ -603,7 +603,7 @@ void relaySetupAPI() {
     // API entry points (protected with apikey)
     for (unsigned int relayID=0; relayID<relayCount(); relayID++) {
 
-        char key[20];
+        char key[64];
 
         snprintf_P(key, sizeof(key), PSTR("%s/%d"), MQTT_TOPIC_RELAY, relayID);
         apiRegister(key,
@@ -630,6 +630,30 @@ void relaySetupAPI() {
             }
         );
 
+        snprintf_P(key, sizeof(key), PSTR("_/relay/%d"), relayID);
+        apiRegister(key,
+            [relayID](JsonObject& root) {
+                root["status"] = _relays[relayID].target_status ? 1 : 0;
+            },
+            [relayID](JsonObject& request, JsonObject& response) {
+                if (request.hasKey("status")) {
+                    unsigned char value = relayParsePayload(request.get<String>("set"));
+                    if (value == 0) {
+                        relayStatus(relayID, false);
+                    } else if (value == 1) {
+                        relayStatus(relayID, true);
+                    } else if (value == 2) {
+                        relayToggle(relayID);
+                    } else {
+                        response["error"] = F("unknown status value");
+                        return;
+                    }
+
+                    response["result"] = F("successfuly scheduled relay status change");
+                }
+            }
+        );
+
         snprintf_P(key, sizeof(key), PSTR("%s/%d"), MQTT_TOPIC_PULSE, relayID);
         apiRegister(key,
             [relayID](char * buffer, size_t len) {
@@ -651,6 +675,34 @@ void relaySetupAPI() {
                 return;
 
 
+            }
+        );
+
+        snprintf_P(key, sizeof(key), PSTR("_/pulse/%d"), relayID);
+        apiRegister(key,
+            [relayID](JsonObject& root) {
+                root["value"] = dtostrf((double) _relays[relayID].pulse_ms / 1000, 1-len, 3, buffer);
+            },
+            [relayID](JsonObject& request, JsonObject& response) {
+                // TODO "HH:MM:SS"? "hours", "minutes"
+                // TODO notify of internal pulse limit - 1hour 44minutes (see esp8266 nonos sdk timers)
+                String payload = request.get<String>("milliseconds"); 
+                unsigned long pulse = 1000 * payload.toFloat();
+
+                if (0 == pulse) {
+                    response["error"] = F("Pulse value cannot be zero");
+                    return;
+                }
+
+                if (RELAY_PULSE_NONE != _relays[relayID].pulse) {
+                    DEBUG_MSG_P(PSTR("[RELAY] Overriding relay #%d pulse settings\n"), relayID);
+                }
+
+                _relays[relayID].pulse_ms = pulse;
+                _relays[relayID].pulse = relayStatus(relayID) ? RELAY_PULSE_ON : RELAY_PULSE_OFF;
+                relayToggle(relayID, true, false);
+
+                response["result"] = F("successfuly scheduled pulse");
             }
         );
 
