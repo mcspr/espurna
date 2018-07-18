@@ -14,7 +14,7 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 #include "filters/MovingAverageFilter.h"
 #include "sensors/BaseSensor.h"
 
-typedef struct {
+struct sensor_magnitude_t {
     BaseSensor * sensor;        // Sensor object
     BaseFilter * filter;        // Filter object
     unsigned char local;        // Local index in its provider
@@ -24,7 +24,7 @@ typedef struct {
     double filtered;            // Filtered (averaged) value
     double reported;            // Last reported value
     double min_change;          // Minimum value change to report
-} sensor_magnitude_t;
+};
 
 std::vector<BaseSensor *> _sensors;
 std::vector<sensor_magnitude_t> _magnitudes;
@@ -94,7 +94,6 @@ double _magnitudeProcess(unsigned char type, double value) {
 // -----------------------------------------------------------------------------
 
 #if WEB_SUPPORT
-
 bool _sensorWebSocketOnReceive(const char * key, JsonVariant& value) {
     if (strncmp(key, "pwr", 3) == 0) return true;
     if (strncmp(key, "sns", 3) == 0) return true;
@@ -104,36 +103,50 @@ bool _sensorWebSocketOnReceive(const char * key, JsonVariant& value) {
     return false;
 }
 
-void _sensorWebSocketSendData(JsonObject& root) {
+void _sensorGetMagnitude(const unsigned char id, JsonObject& root) {
+
+    sensor_magnitude_t& magnitude = _magnitudes[id];
 
     char buffer[10];
-    bool hasTemperature = false;
-    bool hasHumidity = false;
+    unsigned char decimals = _magnitudeDecimals(magnitude.type);
+    dtostrf(magnitude.current, 1-sizeof(buffer), decimals, buffer);
+
+    root["index"] = int(magnitude.global);
+    root["type"] = int(magnitude.type);
+    root["value"] = String(buffer);
+    root["units"] = magnitudeUnits(magnitude.type);
+    root["error"] = magnitude.sensor->error();
+
+    if (magnitude.type == MAGNITUDE_ENERGY) {
+        if (_sensor_energy_reset_ts.length() == 0) _sensorReset();
+        root["description"] = magnitude.sensor->slot(magnitude.local) + _sensor_energy_reset_ts;
+    } else {
+        root["description"] = magnitude.sensor->slot(magnitude.local);
+    }
+
+}
+
+void _sensorGetMagnitudes(JsonObject& root) {
 
     JsonArray& list = root.createNestedArray("magnitudes");
     for (unsigned char i=0; i<_magnitudes.size(); i++) {
+        JsonObject& listobj = list.createNestedObject();
+        _sensorGetMagnitude(i, listobj);
+    }
 
-        sensor_magnitude_t magnitude = _magnitudes[i];
-        unsigned char decimals = _magnitudeDecimals(magnitude.type);
-        dtostrf(magnitude.current, 1-sizeof(buffer), decimals, buffer);
+}
 
-        JsonObject& element = list.createNestedObject();
-        element["index"] = int(magnitude.global);
-        element["type"] = int(magnitude.type);
-        element["value"] = String(buffer);
-        element["units"] = magnitudeUnits(magnitude.type);
-        element["error"] = magnitude.sensor->error();
+void _sensorWebSocketSendData(JsonObject& root) {
 
-        if (magnitude.type == MAGNITUDE_ENERGY) {
-            if (_sensor_energy_reset_ts.length() == 0) _sensorReset();
-            element["description"] = magnitude.sensor->slot(magnitude.local) + _sensor_energy_reset_ts;
-        } else {
-            element["description"] = magnitude.sensor->slot(magnitude.local);
-        }
+    bool hasTemperature = false;
+    bool hasHumidity = false;
 
+    _sensorGetMagnitudes(root);
+
+    for (unsigned char i=0; i<_magnitudes.size(); i++) {
+        sensor_magnitude_t &magnitude = _magnitudes[i];
         if (magnitude.type == MAGNITUDE_TEMPERATURE) hasTemperature = true;
         if (magnitude.type == MAGNITUDE_HUMIDITY) hasHumidity = true;
-
     }
 
     if (hasTemperature) root["temperatureVisible"] = 1;
@@ -225,8 +238,7 @@ void _sensorAPISetup() {
 
     for (unsigned char magnitude_id=0; magnitude_id<_magnitudes.size(); magnitude_id++) {
 
-        sensor_magnitude_t magnitude = _magnitudes[magnitude_id];
-
+        sensor_magnitude_t& magnitude = _magnitudes[magnitude_id];
         String topic = magnitudeTopic(magnitude.type);
         if (SENSOR_USE_INDEX || (_counts[magnitude.type] > 1)) topic = topic + "/" + String(magnitude.global);
 
@@ -237,7 +249,14 @@ void _sensorAPISetup() {
             dtostrf(value, 1-len, decimals, buffer);
         });
 
+        String jsonTopic = String("magnitudes/") + topic;
+        apiRegister(jsonTopic.c_str(), [magnitude_id](JsonObject& response) {
+            _sensorGetMagnitude(magnitude_id, response);
+        });
+
     }
+
+    apiRegister("magnitudes", _sensorGetMagnitudes, NULL);
 
 }
 #endif
