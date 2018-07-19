@@ -879,6 +879,7 @@ void _lightAPISetup() {
         }
     );
 
+#if JSON_API_SUPPORT
     apiRegister("_/color",
         [](JsonObject& root) {
             char buffer[20];
@@ -922,8 +923,10 @@ void _lightAPISetup() {
             lightUpdate(true, true);
         }
     );
+#endif // JSON_API_SUPPORT
   }
 
+#if JSON_API_SUPPORT
   char key[20];
   snprintf_P(key, sizeof(key), PSTR("_/%s"), MQTT_TOPIC_CHANNEL);
   apiRegister(key,
@@ -955,6 +958,8 @@ void _lightAPISetup() {
             lightUpdate(true, true);
         }
     );
+
+#endif // JSON_API_SUPPORT
 
 
   for (unsigned int id=0; id<_light_channel.size(); id++) {

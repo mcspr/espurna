@@ -630,6 +630,31 @@ void relaySetupAPI() {
             }
         );
 
+
+        snprintf_P(key, sizeof(key), PSTR("%s/%d"), MQTT_TOPIC_PULSE, relayID);
+        apiRegister(key,
+            [relayID](char * buffer, size_t len) {
+                dtostrf((double) _relays[relayID].pulse_ms / 1000, 1-len, 3, buffer);
+            },
+            [relayID](const char * payload) {
+
+                unsigned long pulse = 1000 * String(payload).toFloat();
+                if (0 == pulse) return;
+
+                if (RELAY_PULSE_NONE != _relays[relayID].pulse) {
+                    DEBUG_MSG_P(PSTR("[RELAY] Overriding relay #%d pulse settings\n"), relayID);
+                }
+
+                _relays[relayID].pulse_ms = pulse;
+                _relays[relayID].pulse = relayStatus(relayID) ? RELAY_PULSE_ON : RELAY_PULSE_OFF;
+                relayToggle(relayID, true, false);
+
+                return;
+
+            }
+        );
+
+#if JSON_API_SUPPORT
         snprintf_P(key, sizeof(key), PSTR("_/relay/%d"), relayID);
         apiRegister(key,
             [relayID](JsonObject& root) {
@@ -660,34 +685,11 @@ void relaySetupAPI() {
         apiRegister("_/relays",
             _relayWebSocketUpdate,
             [](JsonObject& request, JsonObject& response) {
-                JsonArray& relays = request["status"];
+                JsonArray& relays = request["relayStatus"];
                 for (unsigned char i; i<_relays.size(); i++) {
                     relayStatus(i, relays.get<bool>(i));
                 }
                 response["result"] = F("success");
-            }
-        );
-
-        snprintf_P(key, sizeof(key), PSTR("%s/%d"), MQTT_TOPIC_PULSE, relayID);
-        apiRegister(key,
-            [relayID](char * buffer, size_t len) {
-                dtostrf((double) _relays[relayID].pulse_ms / 1000, 1-len, 3, buffer);
-            },
-            [relayID](const char * payload) {
-
-                unsigned long pulse = 1000 * String(payload).toFloat();
-                if (0 == pulse) return;
-
-                if (RELAY_PULSE_NONE != _relays[relayID].pulse) {
-                    DEBUG_MSG_P(PSTR("[RELAY] Overriding relay #%d pulse settings\n"), relayID);
-                }
-
-                _relays[relayID].pulse_ms = pulse;
-                _relays[relayID].pulse = relayStatus(relayID) ? RELAY_PULSE_ON : RELAY_PULSE_OFF;
-                relayToggle(relayID, true, false);
-
-                return;
-
             }
         );
 
@@ -718,7 +720,7 @@ void relaySetupAPI() {
                 response["result"] = F("successfuly scheduled pulse");
             }
         );
-
+#endif // JSON_API_SUPPORT
     }
 
 }

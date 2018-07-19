@@ -130,6 +130,8 @@ ArRequestHandlerFunction _bindAPI(unsigned int apiID) {
 
 }
 
+#if JSON_API_SUPPORT
+
 bool _validateJsonAPIRequest(AsyncWebServerRequest *request) {
     if (getSetting("apiEnabled", API_ENABLED).toInt() == 0) {
         DEBUG_MSG_P(PSTR("[WEBSERVER] HTTP JSON API is not enabled\n"));
@@ -302,6 +304,8 @@ void _handleJsonRPCAction(JsonObject& request, JsonObject& response) {
     response.set("error", "no matching action");
 }
 
+#endif // JSON_API_SUPPORT
+
 void _onRPC(AsyncWebServerRequest *request) {
 
     webLog(request);
@@ -347,6 +351,7 @@ void apiRegister(const char * key, api_get_callback_f getFn, api_put_callback_f 
 
 }
 
+#if JSON_API_SUPPORT
 void apiRegister(const char * key, json_api_get_callback_f getFn, json_api_put_callback_f putFn) {
     web_json_api_t api;
     char buffer[40];
@@ -363,6 +368,7 @@ void apiRegister(const char * key, json_api_get_callback_f getFn, json_api_put_c
         webServer()->on(buffer, HTTP_PUT, _bindJsonAPIPut(idx), NULL, _bindJsonAPIPutBody(idx));
     }
 }
+#endif
 
 void apiRegisterAction(const char * name, api_action_callback_f callbackFn) {
     web_api_action_t action;
@@ -374,12 +380,14 @@ void apiRegisterAction(const char * name, api_action_callback_f callbackFn) {
 void apiSetup() {
     webServer()->on("/apis", HTTP_GET, _onAPIs);
     webServer()->on("/rpc", HTTP_GET, _onRPC);
-
-    apiRegister("_/device", info_device, NULL);
-    apiRegister("_/status", info_status, NULL);
-
     apiRegisterAction("reboot", [](void) { deferredReset(1000, CUSTOM_RESET_RPC); });
-    apiRegister("_/rpc", _listJsonRPCActions, _handleJsonRPCAction);
+
+    #if JSON_API_SUPPORT
+        apiRegister("_/device", info_device, NULL);
+        apiRegister("_/status", info_status, NULL);
+
+        apiRegister("_/rpc", _listJsonRPCActions, _handleJsonRPCAction);
+    #endif
 
     wsOnSendRegister(_apiWebSocketOnSend);
     wsOnReceiveRegister(_apiWebSocketOnReceive);

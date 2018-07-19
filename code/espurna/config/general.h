@@ -367,6 +367,10 @@
 #define WEB_SUPPORT                 1           // Enable web support (http, api, 121.65Kb)
 #endif
 
+#ifndef JSON_API_SUPPORT
+#define JSON_API_SUPPORT            0           // Enable extended JSON http api (???.??kb)
+#endif
+
 #ifndef WEB_EMBEDDED
 #define WEB_EMBEDDED                1           // Build the firmware with the web interface embedded in
 #endif
