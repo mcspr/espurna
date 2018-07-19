@@ -884,11 +884,7 @@ void _lightAPISetup() {
         [](JsonObject& root) {
             char buffer[20];
 
-            if (getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1) {
-                _toRGB(buffer, sizeof(buffer));
-            } else {
-                _toLong(buffer, sizeof(buffer));
-            }
+            _toRGB(buffer, sizeof(buffer));
             root[MQTT_TOPIC_COLOR_RGB].set(strdup(buffer));
 
             _toHSV(buffer, sizeof(buffer));
@@ -900,11 +896,7 @@ void _lightAPISetup() {
         [](JsonObject& request, JsonObject& response) {
             if (request.containsKey("rgb")) {
                 const char* buffer = request.get<const char*>("rgb");
-                if (getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1) {
-                    _fromRGB(buffer);
-                } else {
-                    _fromLong(atol(buffer + 1), strlen(buffer) > 7);
-                }
+                _fromRGB(buffer);
             } else if (request.containsKey("hsv")) {
                 const char* buffer = request.get<const char*>("hsv");
                 _fromHSV(buffer);
@@ -915,7 +907,7 @@ void _lightAPISetup() {
                 const unsigned long mireds = request.get<unsigned long>("mireds");
                 _fromMireds(mireds);
             } else {
-                response["error"] = F("unknown setter! use rgb, hsv, kelvin or mireds");
+                response["error"] = F("unknown setter! use \"rgb\", \"hsv\", \"kelvin\" or \"mireds\"");
                 return;
             }
 
