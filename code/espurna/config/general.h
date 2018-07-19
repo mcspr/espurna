@@ -368,7 +368,7 @@
 #endif
 
 #ifndef JSON_API_SUPPORT
-#define JSON_API_SUPPORT            0           // Enable extended JSON http api (???.??kb)
+#define JSON_API_SUPPORT            0           // Enable extended JSON http api (~10kb)
 #endif
 
 #ifndef WEB_EMBEDDED
