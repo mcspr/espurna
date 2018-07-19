@@ -27,12 +27,14 @@ typedef struct {
 } web_api_action_t;
 std::vector<web_api_action_t> _api_actions;
 
-typedef struct {
-    char * key;
-    json_api_get_callback_f getFn = NULL;
-    json_api_put_callback_f putFn = NULL;
-} web_json_api_t;
-std::vector<web_json_api_t> _json_apis;
+#if JSON_API_SUPPORT
+    typedef struct {
+        char * key;
+        json_api_get_callback_f getFn = NULL;
+        json_api_put_callback_f putFn = NULL;
+    } web_json_api_t;
+    std::vector<web_json_api_t> _json_apis;
+#endif
 
 // -----------------------------------------------------------------------------
 
@@ -245,41 +247,6 @@ ArBodyHandlerFunction _bindJsonAPIPutBody(unsigned int apiID) {
     };
 }
 
-void _onAPIs(AsyncWebServerRequest *request) {
-
-    webLog(request);
-    if (!_authAPI(request)) return;
-
-    bool asJson = _asJson(request);
-
-    char buffer[40];
-
-    String output;
-    if (asJson) {
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& root = jsonBuffer.createObject();
-        for (unsigned int i=0; i < _apis.size(); i++) {
-            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
-            root[_apis[i].key] = String(buffer);
-        }
-        for (unsigned int i=0; i < _json_apis.size(); i++) {
-            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _json_apis[i].key);
-            root[_json_apis[i].key] = String(buffer);
-        }
-        root.printTo(output);
-        jsonBuffer.clear();
-        request->send(200, "application/json", output);
-
-    } else {
-        for (unsigned int i=0; i < _apis.size(); i++) {
-            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
-            output += _apis[i].key + String(" -> ") + String(buffer) + String("\n");
-        }
-        request->send(200, "text/plain", output);
-    }
-
-}
-
 void _listJsonRPCActions(JsonObject& response) {
     JsonArray& array = response.createNestedArray("actions");
     for (unsigned int i=0; i < _api_actions.size(); i++) {
@@ -305,6 +272,43 @@ void _handleJsonRPCAction(JsonObject& request, JsonObject& response) {
 }
 
 #endif // JSON_API_SUPPORT
+
+void _onAPIs(AsyncWebServerRequest *request) {
+
+    webLog(request);
+    if (!_authAPI(request)) return;
+
+    bool asJson = _asJson(request);
+
+    char buffer[40];
+
+    String output;
+    if (asJson) {
+        DynamicJsonBuffer jsonBuffer;
+        JsonObject& root = jsonBuffer.createObject();
+        for (unsigned int i=0; i < _apis.size(); i++) {
+            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
+            root[_apis[i].key] = String(buffer);
+        }
+        #if JSON_API_SUPPORT
+            for (unsigned int i=0; i < _json_apis.size(); i++) {
+                snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _json_apis[i].key);
+                root[_json_apis[i].key] = String(buffer);
+            }
+        #endif
+        root.printTo(output);
+        jsonBuffer.clear();
+        request->send(200, "application/json", output);
+
+    } else {
+        for (unsigned int i=0; i < _apis.size(); i++) {
+            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
+            output += _apis[i].key + String(" -> ") + String(buffer) + String("\n");
+        }
+        request->send(200, "text/plain", output);
+    }
+
+}
 
 void _onRPC(AsyncWebServerRequest *request) {
 
