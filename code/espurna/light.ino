@@ -766,6 +766,8 @@ bool _lightWebSocketOnReceive(const char * key, JsonVariant& value) {
 }
 
 void _lightGetValues(JsonObject& root) {
+    bool useRGB = getSetting("useRGB", LIGHT_USE_RGB).toInt() == 1;
+
     if (_light_has_color) {
         if (_light_use_cct) {
             root["useCCT"] = _light_use_cct;

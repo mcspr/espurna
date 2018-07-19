@@ -668,7 +668,7 @@ void relaySetupAPI() {
 
                 unsigned char value = 0;
 
-                JsonVariant update = root["update"];
+                JsonVariant update = request["update"];
                 if (update.is<char *>()) {
                     value = relayParsePayload(request.get<char*>("update"));
                 } else if (update.is<unsigned char>()) {
