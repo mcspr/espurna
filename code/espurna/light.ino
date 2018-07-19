@@ -765,17 +765,7 @@ bool _lightWebSocketOnReceive(const char * key, JsonVariant& value) {
     return false;
 }
 
-void _lightWebSocketOnSend(JsonObject& root) {
-    root["colorVisible"] = 1;
-    root["mqttGroupColor"] = getSetting("mqttGroupColor");
-    root["useColor"] = _light_has_color;
-    root["useWhite"] = _light_use_white;
-    root["useGamma"] = _light_use_gamma;
-    root["useTransitions"] = _light_use_transitions;
-    root["lightTime"] = _light_transition_time;
-    root["useCSS"] = getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1;
-    bool useRGB = getSetting("useRGB", LIGHT_USE_RGB).toInt() == 1;
-    root["useRGB"] = useRGB;
+void _lightGetValues(JsonObject& root) {
     if (_light_has_color) {
         if (_light_use_cct) {
             root["useCCT"] = _light_use_cct;
@@ -792,6 +782,20 @@ void _lightWebSocketOnSend(JsonObject& root) {
     for (unsigned char id=0; id < _light_channel.size(); id++) {
         channels.add(lightChannel(id));
     }
+}
+
+void _lightWebSocketOnSend(JsonObject& root) {
+    root["colorVisible"] = 1;
+    root["mqttGroupColor"] = getSetting("mqttGroupColor");
+    root["useColor"] = _light_has_color;
+    root["useWhite"] = _light_use_white;
+    root["useGamma"] = _light_use_gamma;
+    root["useTransitions"] = _light_use_transitions;
+    root["lightTime"] = _light_transition_time;
+    root["useCSS"] = getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1;
+    bool useRGB = getSetting("useRGB", LIGHT_USE_RGB).toInt() == 1;
+    root["useRGB"] = useRGB;
+    _lightGetValues(root);
 }
 
 void _lightWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& data) {
@@ -880,21 +884,27 @@ void _lightAPISetup() {
     );
 
 #if JSON_API_SUPPORT
-    apiRegister("_/color",
-        [](JsonObject& root) {
-            char buffer[20];
-
-            _toRGB(buffer, sizeof(buffer));
-            root[MQTT_TOPIC_COLOR_RGB].set(strdup(buffer));
-
-            _toHSV(buffer, sizeof(buffer));
-            root[MQTT_TOPIC_COLOR_HSV].set(strdup(buffer));
-
-			snprintf_P(buffer, sizeof(buffer), PSTR("%d"), _light_brightness);
-            root[MQTT_TOPIC_BRIGHTNESS].set(strdup(buffer));
-        },
+    apiRegister("_/light",
+        _lightGetValues,
         [](JsonObject& request, JsonObject& response) {
-            if (request.containsKey("rgb")) {
+            if ((!_light_has_color) && (
+                    request.containsKey("rgb") || \
+                    request.containsKey("hsv") || \
+                    request.containsKey("kelvin") || \
+                    request.containsKey("kelvin"))) {
+                response["error"] = F("device does not support color settings");
+                return;
+            }
+
+            if (request.containsKey("brightness")) {
+                const unsigned long brightness = request.get<unsigned long>("brightness");
+                lightBrightness(brightness);
+                lightUpdate(true, true);
+            } else if (request.containsKey("brightness")) {
+                const unsigned long brightness = request.get<unsigned long>("brightness");
+                lightBrightness(brightness);
+                lightUpdate(true, true);
+            } else if (request.containsKey("rgb")) {
                 const char* buffer = request.get<const char*>("rgb");
                 _fromRGB(buffer);
             } else if (request.containsKey("hsv")) {
@@ -907,7 +917,7 @@ void _lightAPISetup() {
                 const unsigned long mireds = request.get<unsigned long>("mireds");
                 _fromMireds(mireds);
             } else {
-                response["error"] = F("unknown setter! use \"rgb\", \"hsv\", \"kelvin\" or \"mireds\"");
+                response["error"] = F("unknown setter! use \"brightness\", \"rgb\", \"hsv\", \"kelvin\" or \"mireds\"");
                 return;
             }
 
