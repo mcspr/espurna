@@ -271,6 +271,23 @@ void _handleJsonRPCAction(JsonObject& request, JsonObject& response) {
     response.set("error", "no matching action");
 }
 
+void _jsonOnAPIs(AsyncWebServerRequest *request) {
+    webLog(request);
+    if (!_validateJsonAPIRequest(request)) return;
+
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonObject& root = response->getRoot();
+
+    char buffer[40];
+    for (unsigned int i=0; i < _json_apis.size(); i++) {
+        snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _json_apis[i].key);
+        root[_json_apis[i].key] = String(buffer);
+    }
+
+    response->setLength();
+    request->send(response);
+}
+
 #endif // JSON_API_SUPPORT
 
 void _onAPIs(AsyncWebServerRequest *request) {
@@ -290,12 +307,6 @@ void _onAPIs(AsyncWebServerRequest *request) {
             snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
             root[_apis[i].key] = String(buffer);
         }
-        #if JSON_API_SUPPORT
-            for (unsigned int i=0; i < _json_apis.size(); i++) {
-                snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _json_apis[i].key);
-                root[_json_apis[i].key] = String(buffer);
-            }
-        #endif
         root.printTo(output);
         jsonBuffer.clear();
         request->send(200, "application/json", output);
@@ -387,6 +398,7 @@ void apiSetup() {
     apiRegisterAction("reboot", [](void) { deferredReset(1000, CUSTOM_RESET_RPC); });
 
     #if JSON_API_SUPPORT
+        webServer()->on("apis/_", HTTP_GET, _jsonOnAPIs);
         apiRegister("_/device", info_device, NULL);
         apiRegister("_/status", info_status, NULL);
 
