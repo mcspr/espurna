@@ -2470,6 +2470,9 @@
     #define ECH1560_MISO_PIN    11
     #define ECH1560_INVERTED    12
 
+    // Check new json api
+    #define JSON_API_SUPPORT    1
+
 #elif defined(TRAVIS02)
 
     // Relay provider dual
