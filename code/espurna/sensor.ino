@@ -249,16 +249,18 @@ void _sensorAPISetup() {
             dtostrf(value, 1-len, decimals, buffer);
         });
 
-#if JSON_API_SUPPORT
-        String jsonTopic = String("_/magnitudes/") + topic;
-        apiRegister(jsonTopic.c_str(), [magnitude_id](JsonObject& response) {
-            _sensorGetMagnitude(magnitude_id, response);
-        });
+        #if JSON_API_SUPPORT
+                String jsonTopic = String("_/magnitudes/") + topic;
+                apiRegister(jsonTopic.c_str(), [magnitude_id](JsonObject& response) {
+                    _sensorGetMagnitude(magnitude_id, response);
+                });
+        #endif // JSON_API_SUPPORT
 
     }
 
-    apiRegister("_/magnitudes", _sensorGetMagnitudes, NULL);
-#endif // JSON_API_SUPPORT
+    #if JSON_API_SUPPORT
+        apiRegister("_/magnitudes", _sensorGetMagnitudes, NULL);
+    #endif // JSON_API_SUPPORT
 
 }
 #endif
