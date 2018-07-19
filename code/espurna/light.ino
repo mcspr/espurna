@@ -903,16 +903,16 @@ void _lightAPISetup() {
                 if (getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1) {
                     _fromRGB(buffer);
                 } else {
-                    _fromLong(buffer);
+                    _fromLong(atol(buffer + 1), strlen(buffer) > 7);
                 }
             } else if (request.containsKey("hsv")) {
                 const char* buffer = request.get<const char*>("hsv");
                 _fromHSV(buffer);
             } else if (request.containsKey("kelvin")) {
-                const unsigned long kelvin = request.get<const unsigned long>("kelvin");
+                const unsigned long kelvin = request.get<unsigned long>("kelvin");
                 _fromKelvin(kelvin);
             } else if (request.containsKey("mireds")) {
-                const unsigned long mireds = request.get<const unsigned long>("mireds");
+                const unsigned long mireds = request.get<unsigned long>("mireds");
                 _fromMireds(mireds);
             } else {
                 response["error"] = F("unknown setter! use rgb, hsv, kelvin or mireds");
@@ -937,13 +937,13 @@ void _lightAPISetup() {
             }
         },
         [](JsonObject& request, JsonObject& response) {
-            if (!request.hasKey("channels")) {
+            if (!request.containsKey("channels")) {
                 response["error"] = F("no \"channels\" key");
                 return;
             }
 
             JsonArray& channels = request["channels"];
-            if (channels.size() != _light_channel.size())
+            if (channels.size() != _light_channel.size()) {
                 response["error"] = F("invalid channels size");
                 return;
             }
