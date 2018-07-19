@@ -636,8 +636,8 @@ void relaySetupAPI() {
                 root["status"] = _relays[relayID].target_status ? 1 : 0;
             },
             [relayID](JsonObject& request, JsonObject& response) {
-                if (request.hasKey("status")) {
-                    unsigned char value = relayParsePayload(request.get<String>("set"));
+                if (request.containsKey("update")) {
+                    unsigned char value = relayParsePayload(request.get<char*>("update"));
                     if (value == 0) {
                         relayStatus(relayID, false);
                     } else if (value == 1) {
@@ -650,7 +650,21 @@ void relaySetupAPI() {
                     }
 
                     response["result"] = F("successfuly scheduled relay status change");
+                    return;
                 }
+
+                response["error"] = F("unknown arguments");
+            }
+        );
+
+        apiRegister("_/relays",
+            _relayWebSocketUpdate,
+            [](JsonObject& request, JsonObject& response) {
+                JsonArray& relays = request["status"];
+                for (unsigned char i; i<_relays.size(); i++) {
+                    relayStatus(i, relays.get<bool>(i));
+                }
+                response["result"] = F("success");
             }
         );
 
@@ -674,14 +688,13 @@ void relaySetupAPI() {
 
                 return;
 
-
             }
         );
 
         snprintf_P(key, sizeof(key), PSTR("_/pulse/%d"), relayID);
         apiRegister(key,
             [relayID](JsonObject& root) {
-                root["value"] = dtostrf((double) _relays[relayID].pulse_ms / 1000, 1-len, 3, buffer);
+                root["value"] = roundTo(_relays[relayID].pulse_ms, 3);
             },
             [relayID](JsonObject& request, JsonObject& response) {
                 // TODO "HH:MM:SS"? "hours", "minutes"

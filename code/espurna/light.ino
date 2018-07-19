@@ -878,7 +878,84 @@ void _lightAPISetup() {
             lightUpdate(true, true);
         }
     );
+
+    apiRegister("_/color",
+        [](JsonObject& root) {
+            char buffer[20];
+
+            if (getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1) {
+                _toRGB(buffer, sizeof(buffer));
+            } else {
+                _toLong(buffer, sizeof(buffer));
+            }
+            root[MQTT_TOPIC_COLOR_RGB].set(strdup(buffer));
+
+            _toHSV(buffer, sizeof(buffer));
+            root[MQTT_TOPIC_COLOR_HSV].set(strdup(buffer));
+
+			snprintf_P(buffer, sizeof(buffer), PSTR("%d"), _light_brightness);
+            root[MQTT_TOPIC_BRIGHTNESS].set(strdup(buffer));
+        },
+        [](JsonObject& request, JsonObject& response) {
+            if (request.containsKey("rgb")) {
+                const char* buffer = request.get<const char*>("rgb");
+                if (getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1) {
+                    _fromRGB(buffer);
+                } else {
+                    _fromLong(buffer);
+                }
+            } else if (request.containsKey("hsv")) {
+                const char* buffer = request.get<const char*>("hsv");
+                _fromHSV(buffer);
+            } else if (request.containsKey("kelvin")) {
+                const unsigned long kelvin = request.get<const unsigned long>("kelvin");
+                _fromKelvin(kelvin);
+            } else if (request.containsKey("mireds")) {
+                const unsigned long mireds = request.get<const unsigned long>("mireds");
+                _fromMireds(mireds);
+            } else {
+                response["error"] = F("unknown setter! use rgb, hsv, kelvin or mireds");
+                return;
+            }
+
+            response["result"] = F("success");
+            lightUpdate(true, true);
+        }
+    );
   }
+
+  char key[20];
+  snprintf_P(key, sizeof(key), PSTR("_/%s"), MQTT_TOPIC_CHANNEL);
+  apiRegister(key,
+        [](JsonObject& root) {
+            JsonArray& channels = root.createNestedArray("channels");
+            for (unsigned char id=0; id < _light_channel.size(); id++) {
+                channels.add(lightChannel(id));
+            }
+        },
+        [](JsonObject& request, JsonObject& response) {
+            if (!request.hasKey("channels")) {
+                response["error"] = F("no \"channels\" key");
+                return;
+            }
+
+            JsonArray& channels = request["channels"];
+            if (channels.size() != _light_channel.size())
+                response["error"] = F("invalid channels size");
+                return;
+            }
+
+            response["result"] = F("light channels succesfuly updated");
+            response["count"] = channels.size();
+
+            for (unsigned char i=0; i<_light_channel.size(); i++) {
+                lightChannel(i, channels[i]);
+            }
+
+            lightUpdate(true, true);
+        }
+    );
+
 
   for (unsigned int id=0; id<_light_channel.size(); id++) {
       char key[15];
