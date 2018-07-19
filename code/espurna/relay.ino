@@ -661,24 +661,32 @@ void relaySetupAPI() {
                 root["status"] = _relays[relayID].target_status ? 1 : 0;
             },
             [relayID](JsonObject& request, JsonObject& response) {
-                if (request.containsKey("update")) {
-                    unsigned char value = relayParsePayload(request.get<char*>("update"));
-                    if (value == 0) {
-                        relayStatus(relayID, false);
-                    } else if (value == 1) {
-                        relayStatus(relayID, true);
-                    } else if (value == 2) {
-                        relayToggle(relayID);
-                    } else {
-                        response["error"] = F("unknown status value");
-                        return;
-                    }
-
-                    response["result"] = F("successfuly scheduled relay status change");
+                if (!request.containsKey("update")) {
+                    response["error"] = F("unknown arguments");
                     return;
                 }
 
-                response["error"] = F("unknown arguments");
+                unsigned char value = 0;
+
+                JsonVariant update = root["update"];
+                if (update.is<char *>()) {
+                    value = relayParsePayload(request.get<char*>("update"));
+                } else if (update.is<unsigned char>()) {
+                    value = update.as<unsigned char>();
+                }
+
+                if (value == 0) {
+                    relayStatus(relayID, false);
+                } else if (value == 1) {
+                    relayStatus(relayID, true);
+                } else if (value == 2) {
+                    relayToggle(relayID);
+                } else {
+                    response["error"] = F("unknown status value");
+                    return;
+                }
+
+                response["result"] = F("successfuly scheduled relay status change");
             }
         );
 
