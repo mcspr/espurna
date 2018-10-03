@@ -1069,6 +1069,16 @@
 #endif
 
 // -----------------------------------------------------------------------------
+// DNS Resolver
+// Includes workaround for NtpClient to avoid doing blocking DNS requests.
+// Terminal command 'nslookup <host>'
+// -----------------------------------------------------------------------------
+
+#ifndef DNS_RESOLVER
+#define DNS_RESOLVER                1               // Async DNS resolver api and terminal command (1Kb)
+#endif
+
+// -----------------------------------------------------------------------------
 // ALEXA
 // -----------------------------------------------------------------------------
 

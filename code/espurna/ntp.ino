@@ -16,6 +16,14 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 unsigned long _ntp_start = 0;
 bool _ntp_update = false;
 bool _ntp_configure = false;
+bool _ntp_ready = false;
+
+String _ntp_server;
+
+void _ntpSetServer(const char* server) {
+    _ntp_server = server;
+    _ntp_ready = true;
+}
 
 // -----------------------------------------------------------------------------
 // NTP
@@ -41,18 +49,37 @@ void _ntpWebSocketOnSend(JsonObject& root) {
 
 void _ntpStart() {
 
-    _ntp_start = 0;
+    if (!_ntp_ready) {
+        _ntpConfigure();
+        _ntp_start = millis() + NTP_START_DELAY;
+        return;
+    }
 
-    NTP.begin(getSetting("ntpServer", NTP_SERVER));
+    NTP.begin(_ntp_server);
+
     NTP.setInterval(NTP_SYNC_INTERVAL, NTP_UPDATE_INTERVAL);
     NTP.setNTPTimeout(NTP_TIMEOUT);
-    _ntpConfigure();
+
+    _ntp_start = 0;
 
 }
 
 void _ntpConfigure() {
 
-    _ntp_configure = false;
+    String server = getSetting("ntpServer", NTP_SERVER);
+    #if DNS_RESOLVER
+        if (!_ntp_ready) {
+            dnsResolve(server.c_str(), &_ntpSetServer);
+            return;
+        }
+    #else
+        _ntpSetServer(server.c_str());
+    #endif
+
+    if (!_ntp_server.equals(NTP.getNtpServerName())) {
+        NTP.setNtpServerName(_ntp_server);
+        _ntp_update = true;
+    }
 
     int offset = getSetting("ntpOffset", NTP_TIME_OFFSET).toInt();
     int sign = offset > 0 ? 1 : -1;
@@ -70,13 +97,11 @@ void _ntpConfigure() {
         _ntp_update = true;
     }
 
-    String server = getSetting("ntpServer", NTP_SERVER);
-    if (!NTP.getNtpServerName().equals(server)) {
-        NTP.setNtpServerName(server);
-    }
-
     uint8_t dst_region = getSetting("ntpRegion", NTP_DST_REGION).toInt();
     NTP.setDSTZone(dst_region);
+
+    _ntp_configure = false;
+    _ntp_ready = true;
 
 }
 
@@ -181,9 +206,29 @@ void ntpSetup() {
         wsOnReceiveRegister(_ntpWebSocketOnReceive);
     #endif
 
+    #if TERMINAL_SUPPORT
+        settingsRegisterCommand(F("NTP"), [](Embedis* e) {
+            if (!_ntp_ready) {
+                DEBUG_MSG_P(PSTR("[NTP] Not ready yet"));
+                return;
+            }
+
+            DEBUG_MSG_P(PSTR("[NTP] Server: %s\n"), NTP.getNtpServerNamePtr());
+            DEBUG_MSG_P(PSTR("[NTP] Synced: %s\n"), ntpSynced() ? "yes" : "no");
+            if (ntpSynced()) {
+                time_t t = now();
+                DEBUG_MSG_P(PSTR("[NTP] UTC Time  : %s\n"), (char *) ntpDateTime(ntpLocal2UTC(t)).c_str());
+                DEBUG_MSG_P(PSTR("[NTP] Local Time: %s\n"), (char *) ntpDateTime(t).c_str());
+            }
+        });
+    #endif
+
     // Main callbacks
     espurnaRegisterLoop(_ntpLoop);
-    espurnaRegisterReload([]() { _ntp_configure = true; });
+    espurnaRegisterReload([]() {
+        _ntp_configure = true;
+        _ntp_ready = false;
+    });
 
 }
 
