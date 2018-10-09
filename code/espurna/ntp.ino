@@ -80,10 +80,15 @@ inline bool ntpSynced() {
     return cbtime_set;
 }
 
-String ntpDateTime() {
-    time_t ts = time(nullptr);
+String ntpDateTime(time_t ts) {
     return String(asctime(localtime(&ts)));
 }
+
+String ntpDateTime() {
+    time_t ts = time(nullptr);
+    return ntpDateTime(ts);
+}
+
 
 // -----------------------------------------------------------------------------
 

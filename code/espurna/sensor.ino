@@ -300,9 +300,9 @@ void _sensorResetTS() {
     #if NTP_SUPPORT
         if (ntpSynced()) {
             if (_sensor_energy_reset_ts.length() == 0) {
-                _sensor_energy_reset_ts = ntpDateTime(now() - millis() / 1000);
+                _sensor_energy_reset_ts = ntpDateTime(time(nullptr) - (millis() / 1000));
             } else {
-                _sensor_energy_reset_ts = ntpDateTime(now());
+                _sensor_energy_reset_ts = ntpDateTime();
             }
         } else {
             _sensor_energy_reset_ts = String();
