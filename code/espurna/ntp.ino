@@ -8,8 +8,6 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if NTP_SUPPORT
 
-#include <ctime>
-
 bool _ntp_update = false;
 bool _ntp_configure = false;
 
@@ -63,8 +61,8 @@ void _ntpUpdate() {
     if (ntpSynced()) {
         time_t ts = time(nullptr);
 
-        DEBUG_MSG_P(PSTR("[NTP] UTC Time  : %s\n"), std::asctime(std::gmtime(&ts)));
-        DEBUG_MSG_P(PSTR("[NTP] Local Time: %s\n"), std::asctime(std::localtime(&ts)));
+        DEBUG_MSG_P(PSTR("[NTP] UTC Time  : %s\n"), asctime(gmtime(&ts)));
+        DEBUG_MSG_P(PSTR("[NTP] Local Time: %s\n"), asctime(localtime(&ts)));
     }
 
 }
@@ -84,7 +82,7 @@ inline bool ntpSynced() {
 
 String ntpDateTime() {
     time_t ts = time(nullptr);
-    return String(std::asctime(localtime(&ts)));
+    return String(asctime(localtime(&ts)));
 }
 
 // -----------------------------------------------------------------------------

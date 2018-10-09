@@ -195,8 +195,8 @@ void _schLoop() {
     tm local_time;
     tm utc_time; 
 
-    localtime_s(&ts, &local_time);
-    gmtime_s(&ts, &utc_time);
+    localtime_r(&ts, &local_time);
+    gmtime_r(&ts, &utc_time);
 
     static unsigned long last_minute = 60;
     unsigned long current_minute = utc_time.tm_min;
