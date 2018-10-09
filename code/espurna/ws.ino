@@ -287,7 +287,7 @@ void _wsUpdate(JsonObject& root) {
         root["vcc"] = ESP.getVcc();
     #endif
     #if NTP_SUPPORT
-        if (ntpSynced()) root["now"] = now();
+        if (ntpSynced()) root["now"] = time(nullptr);
     #endif
 }
 

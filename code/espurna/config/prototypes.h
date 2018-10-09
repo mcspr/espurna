@@ -193,3 +193,11 @@ void webRequestRegister(web_request_callback_f callback);
 #include "JustWifi.h"
 typedef std::function<void(justwifi_messages_t code, char * parameter)> wifi_callback_f;
 void wifiRegister(wifi_callback_f callback);
+
+// NTP
+#include <time.h>
+#include <sys/time.h>
+
+#ifndef ARDUINO_ESP8266_RELEASE_2_3_0
+#include <coredecls.h>
+#endif

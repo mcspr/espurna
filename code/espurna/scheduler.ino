@@ -9,8 +9,6 @@ Adapted by Xose Pérez <xose dot perez at gmail dot com>
 
 #if SCHEDULER_SUPPORT
 
-#include <TimeLib.h>
-
 // -----------------------------------------------------------------------------
 
 #if WEB_SUPPORT
@@ -95,10 +93,10 @@ void _schConfigure() {
 
 }
 
-bool _schIsThisWeekday(time_t t, String weekdays){
+bool _schIsThisWeekday(const tm* tm, String weekdays){
 
     // Convert from Sunday to Monday as day 1
-    int w = weekday(t) - 1;
+    long int w = tm->tm_wday - 1;
     if (0 == w) w = 7;
 
     char pch;
@@ -111,16 +109,11 @@ bool _schIsThisWeekday(time_t t, String weekdays){
 
 }
 
-int _schMinutesLeft(time_t t, unsigned char schedule_hour, unsigned char schedule_minute){
-    unsigned char now_hour = hour(t);
-    unsigned char now_minute = minute(t);
-    return (schedule_hour - now_hour) * 60 + schedule_minute - now_minute;
+int _schMinutesLeft(const tm* now, unsigned long schedule_hour, unsigned long schedule_minute){
+    return (schedule_hour - now->tm_hour) * 60 + schedule_minute - now->tm_min;
 }
 
-void _schCheck() {
-
-    time_t local_time = now();
-    time_t utc_time = ntpLocal2UTC(local_time);
+void _schCheck(const tm* utc_time, const tm* local_time) {
 
     // Check schedules
     for (unsigned char i = 0; i < SCHEDULER_MAX_SCHEDULES; i++) {
@@ -133,14 +126,14 @@ void _schCheck() {
 
         // Get the datetime used for the calculation
         bool sch_utc = getSetting("schUTC", i, 0).toInt() == 1;
-        time_t t = sch_utc ? utc_time : local_time;
+        const tm* sch_time = sch_utc ? utc_time : local_time;
 
         String sch_weekdays = getSetting("schWDs", i, "");
-        if (_schIsThisWeekday(t, sch_weekdays)) {
+        if (_schIsThisWeekday(sch_time, sch_weekdays)) {
 
             int sch_hour = getSetting("schHour", i, 0).toInt();
             int sch_minute = getSetting("schMinute", i, 0).toInt();
-            int minutes_to_trigger = _schMinutesLeft(t, sch_hour, sch_minute);
+            int minutes_to_trigger = _schMinutesLeft(sch_time, sch_hour, sch_minute);
 
             if (minutes_to_trigger == 0) {
 
@@ -197,11 +190,20 @@ void _schLoop() {
     if (!ntpSynced()) return;
 
     // Check schedules every minute at hh:mm:00
+    time_t ts = time(nullptr);
+
+    tm local_time;
+    tm utc_time; 
+
+    localtime_s(&ts, &local_time);
+    gmtime_s(&ts, &utc_time);
+
     static unsigned long last_minute = 60;
-    unsigned char current_minute = minute();
+    unsigned long current_minute = utc_time.tm_min;
+
     if (current_minute != last_minute) {
         last_minute = current_minute;
-        _schCheck();
+        _schCheck(&utc_time, &local_time);
     }
 
 }
