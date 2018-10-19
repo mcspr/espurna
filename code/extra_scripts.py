@@ -13,20 +13,7 @@ Import("env", "projenv")
 import json
 import semantic_version
 
-# 2.4.2+ allows to find out ldscript path directly. otherwise, just guessing
-def ldscript_compat(version_max='1.8.0'):
-    platform_max = semantic_version.Version(version_max)
-
-    with open(env['PLATFORM_MANIFEST'], 'r') as f:
-        manifest = json.load(f)
-    platform_version = semantic_version.Version(manifest['version'])
-
-    res = False
-    if platform_version < platform_max:
-        res = True
-
-    return res
-
+# local import
 import ldscript_helper
 
 # ------------------------------------------------------------------------------
@@ -64,6 +51,10 @@ def print_filler(fill, color=Color.WHITE, err=False):
 
     out = sys.stderr if err else sys.stdout
     print(clr(color, fill * width), file=out)
+
+# ------------------------------------------------------------------------------
+# ldscript handling
+# ------------------------------------------------------------------------------
 
 def ldscript_scons_include_name():
     include_name = "local.eagle.app.v6.common.ld"
