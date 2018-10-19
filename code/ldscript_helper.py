@@ -32,13 +32,13 @@ MEMORY
   dport0_0_seg :                        org = 0x3FF00000, len = 0x10
   dram0_0_seg :                         org = 0x3FFE8000, len = 0x14000
   iram1_0_seg :                         org = 0x40100000, len = 0x8000
-  irom0_0_seg :                         org = 0x40201010, len = 0x{irom0_0_seg_len:X}
+  irom0_0_seg :                         org = 0x40201010, len = {irom0_0_seg_len:#x}
 }}
 
-PROVIDE ( _SPIFFS_start = 0x{_SPIFFS_start:X} );
-PROVIDE ( _SPIFFS_end = 0x{_SPIFFS_end:X} );
-PROVIDE ( _SPIFFS_page = 0x{_SPIFFS_page:X} );
-PROVIDE ( _SPIFFS_block = 0x{_SPIFFS_block:X} );
+PROVIDE ( _SPIFFS_start = {_SPIFFS_start:#x} );
+PROVIDE ( _SPIFFS_end = {_SPIFFS_end:#x} );
+PROVIDE ( _SPIFFS_page = {_SPIFFS_page:#x} );
+PROVIDE ( _SPIFFS_block = {_SPIFFS_block:#x} );
 
 INCLUDE \"{include}\"
 """
