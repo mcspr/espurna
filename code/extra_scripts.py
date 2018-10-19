@@ -90,6 +90,9 @@ for flag in env["LINKFLAGS"]:
     if flag.startswith("-Wl,-T"):
         ldscript = flag[6:]
 
+if not ldscript:
+    raise ValueError("\nNo ldscript provided! Check the build_flags\nBUILD_FLAGS = {}\n".format(env["BUILD_FLAGS"]))
+
 ldscript_dir = tempfile.mkdtemp('_espurna')
 ldscript_path = os.path.join(ldscript_dir, ldscript)
 env.Append(LIBPATH=ldscript_dir)
@@ -104,7 +107,7 @@ if not include_name:
     include_name = ldscript_deduce_include_name()
 
 variant = ldscript.replace(".ld", "").replace("eagle.flash.", "")
-ldscript_data = ldscript_helper.render_ldscript(variant, include=include_name)
+ldscript_data = ldscript_helper.render(variant, include=include_name)
 
 with open(ldscript_path, "w") as f:
     f.write(ldscript_data)

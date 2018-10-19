@@ -44,7 +44,7 @@ INCLUDE \"{include}\"
 """
 
 
-def render_ldscript(variant, include):
+def render(variant, include):
     args = VARIANTS[variant]
     args_dict = defaultdict(int, **args)
     args_dict["include"] = include
@@ -62,4 +62,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print(render_ldscript(args.variant, args.include).strip())
+    print(render(args.variant, args.include).strip())
