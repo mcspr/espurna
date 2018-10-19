@@ -119,12 +119,9 @@ with open(ldscript_path, "w") as f:
     f.write(ldscript_data)
 
 # TODO remove this
-print_filler("-")
-print_warning('include_name', include_name)
-print_warning('written', ldscript_path)
-print_warning('variant', variant)
-print(ldscript_data)
-print_filler("-")
+sys.stderr.write('LDSCRIPT include_name: {}\n'.format(include_name))
+sys.stderr.write('LDSCRIPT written: {}\n'.format(ldscript_path))
+sys.stderr.write('LDSCRIPT variant: {}\n'.format(variant))
 
 # ------------------------------------------------------------------------------
 # Callbacks
