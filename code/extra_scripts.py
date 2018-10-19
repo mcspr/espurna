@@ -1,12 +1,33 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
+import atexit
 import os
+import tempfile
 import sys
 from subprocess import call
 import click
 
 Import("env", "projenv")
+
+import json
+import semantic_version
+
+# 2.4.2+ allows to find out ldscript path directly. otherwise, just guessing
+def ldscript_compat(version_max='1.8.0'):
+    platform_max = semantic_version.Version(version_max)
+
+    with open(env['PLATFORM_MANIFEST'], 'r') as f:
+        manifest = json.load(f)
+    platform_version = semantic_version.Version(manifest['version'])
+
+    res = False
+    if platform_version < platform_max:
+        res = True
+
+    return res
+
+import ldscript_helper
 
 # ------------------------------------------------------------------------------
 # Utils
@@ -43,6 +64,67 @@ def print_filler(fill, color=Color.WHITE, err=False):
 
     out = sys.stderr if err else sys.stdout
     print(clr(color, fill * width), file=out)
+
+def ldscript_scons_include_name():
+    include_name = "local.eagle.app.v6.common.ld"
+
+    (elf, ) = env.arg2nodes(["$BUILD_DIR/$PROGNAME$PROGSUFFIX"])
+    for child in elf.children():
+        path = str(child)
+        if path.endswith('.ld'):
+            include_name = os.path.basename(path)
+            break
+    else:
+        include_name = ""
+
+    return include_name
+
+def ldscript_deduce_include_name():
+    with open(env['PLATFORM_MANIFEST'], 'r') as f:
+        manifest = json.load(f)
+    platform_version = semantic_version.Version(manifest['version'])
+
+    # @1.5.0 includes ldscripts in the platform package
+    if platform_version == semantic_version.Version("1.5.0"):
+        include_name = "esp8266.flash.common.ld"
+    elif platform_version <= semantic_version.Version("1.8.0"):
+        include_name = "eagle.app.v6.common.ld"
+    else:
+        include_name = "local.eagle.app.v6.common.ld"
+
+    return include_name
+
+ldscript = ""
+for flag in env["LINKFLAGS"]:
+    if flag.startswith("-Wl,-T"):
+        ldscript = flag[6:]
+
+ldscript_dir = tempfile.mkdtemp('_espurna')
+ldscript_path = os.path.join(ldscript_dir, ldscript)
+env.Append(LIBPATH=ldscript_dir)
+
+@atexit.register
+def _delete_tmp():
+    os.unlink(ldscript_path)
+    os.rmdir(ldscript_dir)
+
+include_name = ldscript_scons_include_name()
+if not include_name:
+    include_name = ldscript_deduce_include_name()
+
+variant = ldscript.replace(".ld", "").replace("eagle.flash.", "")
+ldscript_data = ldscript_helper.render_ldscript(variant, include=include_name)
+
+with open(ldscript_path, "w") as f:
+    f.write(ldscript_data)
+
+# TODO remove this
+print_filler("-")
+print_warning('include_name', include_name)
+print_warning('written', ldscript_path)
+print_warning('variant', variant)
+print(ldscript_data)
+print_filler("-")
 
 # ------------------------------------------------------------------------------
 # Callbacks
