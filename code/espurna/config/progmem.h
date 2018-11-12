@@ -223,6 +223,9 @@ PROGMEM const char espurna_sensors[] =
     #if V9261F_SUPPORT
         "V9261F "
     #endif
+    #if UPS_VOLTRONIC_SUPPORT
+        "UPS_VOLTRONIC "
+    #endif
     "";
 
 

@@ -702,6 +702,31 @@
 #define V9261F_POWER_FACTOR             153699.0
 #define V9261F_RPOWER_FACTOR            V9261F_CURRENT_FACTOR
 
+//------------------------------------------------------------------------------
+// UPS Monitor using Voltronic Power protocol
+// Enable support by passing UPS_VOLTRONIC_SUPPORT=1 build flag
+//------------------------------------------------------------------------------
+
+#ifndef UPS_VOLTRONIC_SUPPORT
+#define UPS_VOLTRONIC_SUPPORT           0
+#endif
+
+#ifndef UPS_VOLTRONIC_USE_SOFT
+#define UPS_VOLTRONIC_USE_SOFT          1       // If UPS_VOLTRONIC_USE_SOFT == 1, DEBUG_SERIAL_SUPPORT must be 0
+#endif
+
+#ifndef UPS_VOLTRONIC_RX_PIN
+#define UPS_VOLTRONIC_RX_PIN            12      // Software serial RX GPIO (if UPS_VOLTRONIC_USE_SOFT == 1)
+#endif
+
+#ifndef UPS_VOLTRONIC_TX_PIN
+#define UPS_VOLTRONIC_TX_PIN            13      // Software serial TX GPIO (if UPS_VOLTRONIC_USE_SOFT == 1)
+#endif
+
+#ifndef UPS_VOLTRONIC_HW_PORT
+#define UPS_VOLTRONIC_HW_PORT           Serial  // Hardware serial port (if UPS_VOLTRONIC_USE_SOFT == 0)
+#endif
+
 // =============================================================================
 // Sensor helpers configuration - can't move to dependencies.h
 // =============================================================================
@@ -736,7 +761,8 @@
     SI7021_SUPPORT || \
     SONAR_SUPPORT || \
     TMP3X_SUPPORT || \
-    V9261F_SUPPORT \
+    V9261F_SUPPORT || \
+    UPS_VOLTRONIC_SUPPORT \
 )
 #endif
 
@@ -892,6 +918,10 @@
 
 #if V9261F_SUPPORT
     #include "../sensors/V9261FSensor.h"
+#endif
+
+#if UPS_VOLTRONIC_SUPPORT
+    #include "../sensors/UPSVoltronicSensor.h"
 #endif
 
 #endif // SENSOR_SUPPORT

@@ -705,6 +705,18 @@ void _sensorLoad() {
     }
     #endif
 
+    #if UPS_VOLTRONIC_SUPPORT
+    {
+        UPSVoltronicSensor * sensor = new UPSVoltronicSensor();
+        #if UPS_VOLTRONIC_USE_SOFT
+            sensor->setRX(UPS_VOLTRONIC_RX_PIN);
+            sensor->setTX(UPS_VOLTRONIC_TX_PIN);
+        #else
+            sensor->setSerial(& UPS_VOLTRONIC_HW_PORT);
+        #endif
+        _sensors.push_back(sensor);
+    }
+    #endif
 }
 
 void _sensorCallback(unsigned char i, unsigned char type, double value) {

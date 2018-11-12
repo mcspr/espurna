@@ -173,3 +173,4 @@
 //#define SONAR_SUPPORT          1
 //#define TMP3X_SUPPORT          1
 //#define V9261F_SUPPORT         1
+#define UPS_VOLTRONIC_SUPPORT  1
