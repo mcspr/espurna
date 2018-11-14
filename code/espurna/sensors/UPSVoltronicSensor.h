@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
 // UPS Voltronic protocol Sensor
-// Uses SoftwareSerial library
+// Uses SoftwareUART library
 // Contribution by Antonio Pérez <aperez@skarcha.com>
 // -----------------------------------------------------------------------------
 
@@ -10,7 +10,8 @@
 
 #include "Arduino.h"
 #include "BaseSensor.h"
-#include <SoftwareSerial.h>
+
+#include <SoftwareUART.h>
 
 // Generic data
 #define VOLTRONIC_BAUD_RATE 2400
@@ -51,7 +52,7 @@ class UPSVoltronicSensor : public BaseSensor {
         }
 
         ~UPSVoltronicSensor() {
-            if (_serial) delete _serial;
+            if (_serial && _soft) delete static_cast<SoftwareUART*>(_serial);
         }
 
         void setRX(unsigned char pin_rx) {
@@ -92,13 +93,12 @@ class UPSVoltronicSensor : public BaseSensor {
             if (!_dirty) return;
 
             if (_soft) {
-                if (_serial) delete _serial;
-                _serial = new SoftwareSerial(_pin_rx, _pin_tx, false, 64);
-                static_cast<SoftwareSerial*>(_serial)->enableIntTx(false);
+                if (_serial) delete static_cast<SoftwareUART*>(_serial);
+                _serial = new SoftwareUART(_pin_rx, _pin_tx, false, 64);
             }
 
             if (_soft) {
-                static_cast<SoftwareSerial*>(_serial)->begin(VOLTRONIC_BAUD_RATE);
+                static_cast<SoftwareUART*>(_serial)->begin(VOLTRONIC_BAUD_RATE);
             } else {
                 static_cast<HardwareSerial*>(_serial)->begin(VOLTRONIC_BAUD_RATE);
             }
@@ -195,7 +195,10 @@ class UPSVoltronicSensor : public BaseSensor {
         String _readResponse(size_t count) {
             String response;
 
-            response = _serial->readStringUntil('\r');
+            if (_serial->available()) {
+                response = _serial->readStringUntil('\r');
+            }
+
             if (response.length() < count || response.charAt(0) != '(') {
                 _error = SENSOR_ERROR_TIMEOUT;
             } else {
