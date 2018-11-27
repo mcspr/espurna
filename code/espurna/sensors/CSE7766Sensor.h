@@ -206,16 +206,16 @@ class CSE7766Sensor : public BaseSensor {
             // F2 5A 02 E9 50 00 03 2B 00 3E 9E 02 D7 7C 4F 44 F8 CF A5 5D E1 B3 2A B4 (w/o load)
 
             #if SENSOR_DEBUG
-                DEBUG_MSG("[SENSOR] CSE7766: _process: ");
-                for (byte i=0; i<24; i++) DEBUG_MSG("%02X ", _data[i]);
-                DEBUG_MSG("\n");
+                DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: _process: "));
+                for (byte i=0; i<24; i++) DEBUG_MSG_P(PSTR("%02X "), _data[i]);
+                DEBUG_MSG_P(PSTR("\n"));
             #endif
 
             // Checksum
             if (!_checksum()) {
                 _error = SENSOR_ERROR_CRC;
                 #if SENSOR_DEBUG
-                    DEBUG_MSG("[SENSOR] CSE7766: Checksum error\n");
+                    DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Checksum error\n"));
                 #endif
                 return;
             }
@@ -224,7 +224,7 @@ class CSE7766Sensor : public BaseSensor {
             if (0xAA == _data[0]) {
                 _error = SENSOR_ERROR_CALIBRATION;
                 #if SENSOR_DEBUG
-                    DEBUG_MSG("[SENSOR] CSE7766: Chip not calibrated\n");
+                    DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Chip not calibrated\n"));
                 #endif
                 return;
             }
@@ -232,10 +232,10 @@ class CSE7766Sensor : public BaseSensor {
             if ((_data[0] & 0xFC) > 0xF0) {
                 _error = SENSOR_ERROR_OTHER;
                 #if SENSOR_DEBUG
-                    if (0xF1 == _data[0] & 0xF1) DEBUG_MSG("[SENSOR] CSE7766: Abnormal coefficient storage area\n");
-                    if (0xF2 == _data[0] & 0xF2) DEBUG_MSG("[SENSOR] CSE7766: Power cycle exceeded range\n");
-                    if (0xF4 == _data[0] & 0xF4) DEBUG_MSG("[SENSOR] CSE7766: Current cycle exceeded range\n");
-                    if (0xF8 == _data[0] & 0xF8) DEBUG_MSG("[SENSOR] CSE7766: Voltage cycle exceeded range\n");
+                    if (0xF1 == _data[0] & 0xF1) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Abnormal coefficient storage area\n"));
+                    if (0xF2 == _data[0] & 0xF2) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Power cycle exceeded range\n"));
+                    if (0xF4 == _data[0] & 0xF4) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Current cycle exceeded range\n"));
+                    if (0xF8 == _data[0] & 0xF8) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Voltage cycle exceeded range\n"));
                 #endif
                 return;
             }

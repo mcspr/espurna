@@ -141,7 +141,7 @@ double value(unsigned char index) {
                 char data[128]; char buffer[10];
                 dtostrf(value, 1-sizeof(buffer), 4, buffer);
                 snprintf(data, sizeof(data), "Ticks: %u | Interval: %u | CPM: %s", _ticks, (_lastreport_cpm-_period_begin), buffer);
-                DEBUG_MSG("[GEIGER] %s\n", data);
+                DEBUG_MSG_P(PSTR("[GEIGER] %s\n"), data);
                 #endif
                 _events = 0;
                 return value;
@@ -157,7 +157,7 @@ double value(unsigned char index) {
                 char data[128]; char buffer[10];
                 dtostrf(value, 1-sizeof(buffer), 4, buffer);
                 snprintf(data, sizeof(data), "Ticks: %u | Interval: %u | µSievert: %s", _ticks, (_lastreport_sv-_period_begin), buffer);
-                DEBUG_MSG("[GEIGER] %s\n", data);
+                DEBUG_MSG_P(PSTR("[GEIGER] %s\n"), data);
                 #endif
                 _ticks = 0;
                 return value;

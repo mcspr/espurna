@@ -118,12 +118,12 @@ class EmonSensor : public I2CSensor {
             }
 
             #if SENSOR_DEBUG
-                DEBUG_MSG("[EMON] Reference (mV): %d\n", int(1000 * _reference));
-                DEBUG_MSG("[EMON] ADC counts: %d\n", _adc_counts);
+                DEBUG_MSG_P(PSTR("[EMON] Reference (mV): %d\n"), int(1000 * _reference));
+                DEBUG_MSG_P(PSTR("[EMON] ADC counts: %d\n"), _adc_counts);
                 for (unsigned char i=0; i<_channels; i++) {
-                    DEBUG_MSG("[EMON] Channel #%d current ratio (mA/V): %d\n", i, int(1000 * _current_ratio[i]));
-                    DEBUG_MSG("[EMON] Channel #%d current factor (mA/bit): %d\n", i, int(1000 * _current_factor[i]));
-                    DEBUG_MSG("[EMON] Channel #%d Multiplier: %d\n", i, int(_multiplier[i]));
+                    DEBUG_MSG_P(PSTR("[EMON] Channel #%d current ratio (mA/V): %d\n"), i, int(1000 * _current_ratio[i]));
+                    DEBUG_MSG_P(PSTR("[EMON] Channel #%d current factor (mA/bit): %d\n"), i, int(1000 * _current_factor[i]));
+                    DEBUG_MSG_P(PSTR("[EMON] Channel #%d Multiplier: %d\n"), i, int(_multiplier[i]));
                 }
             #endif
 
@@ -210,15 +210,15 @@ class EmonSensor : public I2CSensor {
             if (current < 0) current = 0;
 
             #if SENSOR_DEBUG
-                DEBUG_MSG("[EMON] Channel: %d\n", channel);
-                DEBUG_MSG("[EMON] Total samples: %d\n", _samples);
-                DEBUG_MSG("[EMON] Total time (ms): %d\n", time_span);
-                DEBUG_MSG("[EMON] Sample frequency (Hz): %d\n", int(1000 * _samples / time_span));
-                DEBUG_MSG("[EMON] Max value: %d\n", max);
-                DEBUG_MSG("[EMON] Min value: %d\n", min);
-                DEBUG_MSG("[EMON] Midpoint value: %d\n", int(_pivot[channel]));
-                DEBUG_MSG("[EMON] RMS value: %d\n", int(rms));
-                DEBUG_MSG("[EMON] Current (mA): %d\n", int(1000 * current));
+                DEBUG_MSG_P(PSTR("[EMON] Channel: %d\n"), channel);
+                DEBUG_MSG_P(PSTR("[EMON] Total samples: %d\n"), _samples);
+                DEBUG_MSG_P(PSTR("[EMON] Total time (ms): %d\n"), time_span);
+                DEBUG_MSG_P(PSTR("[EMON] Sample frequency (Hz): %d\n"), int(1000 * _samples / time_span));
+                DEBUG_MSG_P(PSTR("[EMON] Max value: %d\n"), max);
+                DEBUG_MSG_P(PSTR("[EMON] Min value: %d\n"), min);
+                DEBUG_MSG_P(PSTR("[EMON] Midpoint value: %d\n"), int(_pivot[channel]));
+                DEBUG_MSG_P(PSTR("[EMON] RMS value: %d\n"), int(rms));
+                DEBUG_MSG_P(PSTR("[EMON] Current (mA): %d\n"), int(1000 * current));
             #endif
 
             // Check timing

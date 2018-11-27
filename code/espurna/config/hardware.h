@@ -3013,6 +3013,9 @@
     #define I2C_SDA_PIN         3
     #define I2C_SCL_PIN         4
 
+    // Check debug strings for sensors
+    #define SENSOR_DEBUG        1
+
     // And, as they say in "From Dusk till Dawn":
     // This is a sensor blow out!
     // Alright, we got white sensor, black sensor, spanish sensor, yellow sensor. We got hot sensor, cold sensor.
@@ -3029,7 +3032,7 @@
     #define SHT3X_I2C_SUPPORT     1
     #define SI7021_SUPPORT        1
     #define PMSX003_SUPPORT       1
-    #define SENSEAIR_SUPPORT1
+    #define SENSEAIR_SUPPORT      1
     #define VL53L1X_SUPPORT       1
 
 
@@ -3077,6 +3080,9 @@
     #define BUTTON1_PIN         0
     #define BUTTON1_MODE        BUTTON_PUSHBUTTON | BUTTON_DEFAULT_HIGH
     #define BUTTON1_RELAY       1
+
+    // Check debug strings for sensors
+    #define SENSOR_DEBUG        1
 
     // A bit of CSE7766 - pin 1
     #ifndef CSE7766_SUPPORT
