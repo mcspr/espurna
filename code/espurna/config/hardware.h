@@ -3014,6 +3014,7 @@
     #define I2C_SCL_PIN         4
 
     // Check debug strings for sensors
+    #undef SENSOR_DEBUG
     #define SENSOR_DEBUG        1
 
     // And, as they say in "From Dusk till Dawn":
@@ -3082,6 +3083,7 @@
     #define BUTTON1_RELAY       1
 
     // Check debug strings for sensors
+    #undef SENSOR_DEBUG
     #define SENSOR_DEBUG        1
 
     // A bit of CSE7766 - pin 1
