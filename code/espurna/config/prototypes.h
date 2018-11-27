@@ -8,14 +8,6 @@ extern "C" {
     #include "user_interface.h"
 }
 
-// ref: esp8266/Arduino/core/esp8266/pgmspace.h @ 2.5.0
-// __STRINGIZE && __STRINGIZE_NX && PROGMEM definitions port
-#define __TO_STR_(A) #A
-#define __TO_STR(A) __TO_STR_(A)
-
-#undef PROGMEM
-#define PROGMEM      __attribute__((section( "\".irom.text." __FILE__ "." __TO_STR(__LINE__) "."  __TO_STR(__COUNTER__) "\"")))
-
 // -----------------------------------------------------------------------------
 // API
 // -----------------------------------------------------------------------------
