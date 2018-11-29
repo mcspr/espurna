@@ -1056,7 +1056,7 @@
 #endif
 
 #ifndef NTP_TIMEOUT
-#define NTP_TIMEOUT                 1000            // Set NTP request timeout to 2 seconds (issue #452)
+#define NTP_TIMEOUT                 2000            // Set NTP request timeout to 2 seconds (issue #452)
 #endif
 
 #ifndef NTP_TIME_OFFSET

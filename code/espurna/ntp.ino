@@ -67,8 +67,7 @@ void _ntpStart() {
 
     _ntp_start = 0;
 
-    // TODO override .begin() to allow freely calling now() from sys context
-    NTPc.begin(getSetting("ntpServer", NTP_SERVER));
+    NTPc.espurna_begin(getSetting("ntpServer", NTP_SERVER));
     NTPc.setInterval(NTP_SYNC_INTERVAL, NTP_UPDATE_INTERVAL);
     NTPc.setNTPTimeout(NTP_TIMEOUT);
 
