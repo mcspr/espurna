@@ -8,14 +8,38 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if NTP_SUPPORT
 
+#include <Ticker.h>
 #include <TimeLib.h>
 #include <NtpClientLib.h>
-#include <WiFiClient.h>
-#include <Ticker.h>
 
 unsigned long _ntp_start = 0;
 bool _ntp_update = false;
 bool _ntp_configure = false;
+bool _ntp_want_sync = false;
+bool _ntp_synced_once = false;
+
+class NtpClientWrapper : public NTPClient {
+public:
+
+    bool espurna_begin(const String& ntpServerName) {
+        if (!setNtpServerName(ntpServerName)) {
+            return false;
+        }
+
+        _lastSyncd = 0;
+        udp = new WiFiUDP();
+
+        return true;
+    }
+
+};
+
+NtpClientWrapper NTPc;
+
+time_t _ntpGetTime() {
+    _ntp_want_sync = true;
+    return 0;
+}
 
 // -----------------------------------------------------------------------------
 // NTP
@@ -43,9 +67,14 @@ void _ntpStart() {
 
     _ntp_start = 0;
 
-    NTP.begin(getSetting("ntpServer", NTP_SERVER));
-    NTP.setInterval(NTP_SYNC_INTERVAL, NTP_UPDATE_INTERVAL);
-    NTP.setNTPTimeout(NTP_TIMEOUT);
+    // TODO override .begin() to allow freely calling now() from sys context
+    NTPc.begin(getSetting("ntpServer", NTP_SERVER));
+    NTPc.setInterval(NTP_SYNC_INTERVAL, NTP_UPDATE_INTERVAL);
+    NTPc.setNTPTimeout(NTP_TIMEOUT);
+
+    // XXX TimeLib has status check, but it calls sync function anyways. override locally
+    setSyncProvider(_ntpGetTime);
+
     _ntpConfigure();
 
 }
@@ -59,24 +88,24 @@ void _ntpConfigure() {
     offset = abs(offset);
     int tz_hours = sign * (offset / 60);
     int tz_minutes = sign * (offset % 60);
-    if (NTP.getTimeZone() != tz_hours || NTP.getTimeZoneMinutes() != tz_minutes) {
-        NTP.setTimeZone(tz_hours, tz_minutes);
+    if (NTPc.getTimeZone() != tz_hours || NTP.getTimeZoneMinutes() != tz_minutes) {
+        NTPc.setTimeZone(tz_hours, tz_minutes);
         _ntp_update = true;
     }
 
     bool daylight = getSetting("ntpDST", NTP_DAY_LIGHT).toInt() == 1;
-    if (NTP.getDayLight() != daylight) {
-        NTP.setDayLight(daylight);
+    if (NTPc.getDayLight() != daylight) {
+        NTPc.setDayLight(daylight);
         _ntp_update = true;
     }
 
     String server = getSetting("ntpServer", NTP_SERVER);
-    if (!NTP.getNtpServerName().equals(server)) {
-        NTP.setNtpServerName(server);
+    if (!NTPc.getNtpServerName().equals(server)) {
+        NTPc.setNtpServerName(server);
     }
 
     uint8_t dst_region = getSetting("ntpRegion", NTP_DST_REGION).toInt();
-    NTP.setDSTZone(dst_region);
+    NTPc.setDSTZone(dst_region);
 
 }
 
@@ -96,13 +125,24 @@ void _ntpUpdate() {
 
 }
 
+void _ntpSyncWrapper() {
+    const time_t ts = NTPc.getTime();
+    if (ts) {
+        setTime(ts);
+        _ntp_synced_once = true;
+    }
+}
+
 void _ntpLoop() {
 
     if (0 < _ntp_start && _ntp_start < millis()) _ntpStart();
     if (_ntp_configure) _ntpConfigure();
     if (_ntp_update) _ntpUpdate();
 
-    now();
+    if (_ntp_want_sync) {
+        _ntpSyncWrapper();
+        _ntp_want_sync = false;
+    }
 
     #if BROKER_SUPPORT
         static unsigned char last_minute = 60;
@@ -128,7 +168,7 @@ void _ntpBackwards() {
 // -----------------------------------------------------------------------------
 
 bool ntpSynced() {
-    return (NTP.getLastNTPSync() > 0);
+    return _ntp_synced_once;
 }
 
 String ntpDateTime(time_t t) {
@@ -147,7 +187,7 @@ String ntpDateTime() {
 
 time_t ntpLocal2UTC(time_t local) {
     int offset = getSetting("ntpOffset", NTP_TIME_OFFSET).toInt();
-    if (NTP.isSummerTime()) offset += 60;
+    if (NTPc.isSummerTime()) offset += 60;
     return local - offset * 60;
 }
 
@@ -157,18 +197,22 @@ void ntpSetup() {
 
     _ntpBackwards();
 
-    NTP.onNTPSyncEvent([](NTPSyncEvent_t error) {
-        if (error) {
-            #if WEB_SUPPORT
-                wsSend_P(PSTR("{\"ntpStatus\": false}"));
-            #endif
-            if (error == noResponse) {
-                DEBUG_MSG_P(PSTR("[NTP] Error: NTP server not reachable\n"));
-            } else if (error == invalidAddress) {
-                DEBUG_MSG_P(PSTR("[NTP] Error: Invalid NTP server address\n"));
-            }
-        } else {
+    NTPc.onNTPSyncEvent([](NTPSyncEvent_t error) {
+        if (!error) {
             _ntp_update = true;
+            _ntp_synced_once = true;
+            return;
+        }
+
+        #if WEB_SUPPORT
+            wsSend_P(PSTR("{\"ntpStatus\": false}"));
+        #endif
+        if (error == noResponse) {
+            DEBUG_MSG_P(PSTR("[NTP] Error: NTP server not reachable\n"));
+        } else if (error == invalidAddress) {
+            DEBUG_MSG_P(PSTR("[NTP] Error: Invalid NTP server address\n"));
+        } else {
+            DEBUG_MSG_P(PSTR("[NTP] Unknown error\n"));
         }
     });
 
