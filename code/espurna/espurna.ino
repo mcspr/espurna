@@ -142,6 +142,9 @@ void setup() {
     #if SSDP_SUPPORT
         ssdpSetup();
     #endif
+    #if DNS_SUPPORT
+        dnsSetup();
+    #endif
     #if NTP_SUPPORT
         ntpSetup();
     #endif

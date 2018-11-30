@@ -196,3 +196,31 @@ void webRequestRegister(web_request_callback_f callback);
 typedef std::function<void(justwifi_messages_t code, char * parameter)> wifi_callback_f;
 void wifiRegister(wifi_callback_f callback);
 bool wifiConnected();
+
+// -----------------------------------------------------------------------------
+// Built-in Async DNS
+// -----------------------------------------------------------------------------
+
+#if DNS_RESOLVER
+
+extern "C" {
+  #include "lwip/opt.h"
+  #include "lwip/inet.h" // ip_addr_t
+  #include "lwip/err.h" // ERR_x
+  #include "lwip/dns.h" // dns_gethostbyname
+  #include "lwip/ip_addr.h" // ip4/ip6 helpers
+  #include "lwip/init.h" // LWIP_VERSION_MAJOR
+}
+
+#if (LWIP_VERSION_MAJOR == 1)
+    void _dns_found_callback(const char *, ip_addr_t *, void * = nullptr);
+#else
+    void _dns_found_callback(const char *, const ip_addr_t *, void * = nullptr);
+#endif
+
+typedef std::function<void(const char*)> dns_resolver_cb_f;
+void dnsResolve(const char*, const dns_resolver_cb_f&);
+
+#else
+    #define dns_resolver_cb_f void *
+#endif // DNS_RESOLVER

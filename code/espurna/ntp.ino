@@ -15,8 +15,12 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 unsigned long _ntp_start = 0;
 bool _ntp_update = false;
 bool _ntp_configure = false;
+
+bool _ntp_can_sync = false;
 bool _ntp_want_sync = false;
 bool _ntp_synced_once = false;
+
+String _ntp_server;
 
 class NtpClientWrapper : public NTPClient {
 public:
@@ -27,7 +31,7 @@ public:
         }
 
         _lastSyncd = 0;
-        udp = new WiFiUDP();
+        if (!udp) udp = new WiFiUDP();
 
         return true;
     }
@@ -39,6 +43,12 @@ NtpClientWrapper NTPc;
 time_t _ntpGetTime() {
     _ntp_want_sync = true;
     return 0;
+}
+
+void _ntpSetServer(const char* server) {
+    DEBUG_MSG_P(PSTR("[NTP] Using %s\n"), server);
+    _ntp_server = server;
+    _ntp_can_sync = true;
 }
 
 // -----------------------------------------------------------------------------
@@ -65,8 +75,6 @@ void _ntpWebSocketOnSend(JsonObject& root) {
 
 void _ntpStart() {
 
-    _ntp_start = 0;
-
     NTPc.espurna_begin(getSetting("ntpServer", NTP_SERVER));
     NTPc.setInterval(NTP_SYNC_INTERVAL, NTP_UPDATE_INTERVAL);
     NTPc.setNTPTimeout(NTP_TIMEOUT);
@@ -75,19 +83,25 @@ void _ntpStart() {
     setSyncProvider(_ntpGetTime);
 
     _ntpConfigure();
+    _ntp_start = 0;
 
 }
 
 void _ntpConfigure() {
 
-    _ntp_configure = false;
+    const String server = getSetting("ntpServer", NTP_SERVER);
+    if (!_ntp_server.equalsIgnoreCase(server)) {
+        _ntp_server = server;
+        _ntp_can_sync = false;
+        _ntp_want_sync = true;
+    }
 
     int offset = getSetting("ntpOffset", NTP_TIME_OFFSET).toInt();
     int sign = offset > 0 ? 1 : -1;
     offset = abs(offset);
     int tz_hours = sign * (offset / 60);
     int tz_minutes = sign * (offset % 60);
-    if (NTPc.getTimeZone() != tz_hours || NTP.getTimeZoneMinutes() != tz_minutes) {
+    if (NTPc.getTimeZone() != tz_hours || NTPc.getTimeZoneMinutes() != tz_minutes) {
         NTPc.setTimeZone(tz_hours, tz_minutes);
         _ntp_update = true;
     }
@@ -98,14 +112,20 @@ void _ntpConfigure() {
         _ntp_update = true;
     }
 
-    String server = getSetting("ntpServer", NTP_SERVER);
-    if (!NTPc.getNtpServerName().equals(server)) {
-        NTPc.setNtpServerName(server);
-    }
-
     uint8_t dst_region = getSetting("ntpRegion", NTP_DST_REGION).toInt();
     NTPc.setDSTZone(dst_region);
 
+    _ntp_configure = false;
+}
+
+void _ntpPrintTime() {
+    DEBUG_MSG_P(PSTR("[NTP] Server: %s\n"), NTPc.getNtpServerNamePtr());
+    DEBUG_MSG_P(PSTR("[NTP] Synced: %s\n"), ntpSynced() ? "yes" : "no");
+    if (ntpSynced()) {
+        const time_t ts = now();
+        DEBUG_MSG_P(PSTR("[NTP] UTC Time  : %s\n"), ntpDateTime(ntpLocal2UTC(ts)).c_str());
+        DEBUG_MSG_P(PSTR("[NTP] Local Time: %s\n"), ntpDateTime(ts).c_str());
+    }
 }
 
 void _ntpUpdate() {
@@ -116,30 +136,38 @@ void _ntpUpdate() {
         wsSend(_ntpWebSocketOnSend);
     #endif
 
-    if (ntpSynced()) {
-        time_t t = now();
-        DEBUG_MSG_P(PSTR("[NTP] UTC Time  : %s\n"), (char *) ntpDateTime(ntpLocal2UTC(t)).c_str());
-        DEBUG_MSG_P(PSTR("[NTP] Local Time: %s\n"), (char *) ntpDateTime(t).c_str());
-    }
+    _ntpPrintTime();
 
 }
 
 void _ntpSyncWrapper() {
+    #if DNS_SUPPORT
+        if (!_ntp_can_sync) {
+            dnsResolve(_ntp_server.c_str(), _ntpSetServer);
+            return;
+        }
+    #else
+        _ntpSetServer(_ntp_server.c_str());
+    #endif
+
     const time_t ts = NTPc.getTime();
     if (ts) {
         setTime(ts);
         _ntp_synced_once = true;
+        _ntp_update = true;
     }
 }
 
 void _ntpLoop() {
 
     if (0 < _ntp_start && _ntp_start < millis()) _ntpStart();
+
     if (_ntp_configure) _ntpConfigure();
     if (_ntp_update) _ntpUpdate();
 
-    if (_ntp_want_sync) {
+    if (_ntp_want_sync || _ntp_can_sync) {
         _ntpSyncWrapper();
+        _ntp_can_sync = false;
         _ntp_want_sync = false;
     }
 
@@ -162,6 +190,12 @@ void _ntpBackwards() {
         offset *= 60;
         setSetting("ntpOffset", offset);
     }
+}
+
+void _ntpReset() {
+    _ntp_configure = true;
+    _ntp_can_sync = false;
+    _ntp_want_sync = false;
 }
 
 // -----------------------------------------------------------------------------
@@ -191,6 +225,9 @@ time_t ntpLocal2UTC(time_t local) {
 }
 
 // -----------------------------------------------------------------------------
+void _ntpOnWifiEvent(justwifi_messages_t code, char * parameter) {
+    if (code == MESSAGE_CONNECTED) _ntp_start = millis() + NTP_START_DELAY;
+}
 
 void ntpSetup() {
 
@@ -215,18 +252,28 @@ void ntpSetup() {
         }
     });
 
-    wifiRegister([](justwifi_messages_t code, char * parameter) {
-        if (code == MESSAGE_CONNECTED) _ntp_start = millis() + NTP_START_DELAY;
-    });
+    wifiRegister(_ntpOnWifiEvent);
 
     #if WEB_SUPPORT
         wsOnSendRegister(_ntpWebSocketOnSend);
         wsOnReceiveRegister(_ntpWebSocketOnReceive);
     #endif
 
+    #if TERMINAL_SUPPORT
+        settingsRegisterCommand(F("NTP"), [](Embedis* e) {
+            if (!ntpSynced()) {
+                DEBUG_MSG_P(PSTR("[NTP] Not synced yet"));
+                return;
+            }
+
+            _ntpPrintTime();
+
+        });
+    #endif
+
     // Main callbacks
     espurnaRegisterLoop(_ntpLoop);
-    espurnaRegisterReload([]() { _ntp_configure = true; });
+    espurnaRegisterReload(_ntpReset);
 
 }
 
