@@ -353,6 +353,7 @@ void infoMemory(const char * name, unsigned int total_memory, unsigned int free_
 }
 
 void info() {
+#if DEBUG_SUPPORT
 
     DEBUG_MSG_P(PSTR("\n\n---8<-------\n\n"));
 
@@ -468,6 +469,7 @@ void info() {
 
     DEBUG_MSG_P(PSTR("\n\n---8<-------\n\n"));
 
+#endif
 }
 
 // -----------------------------------------------------------------------------
