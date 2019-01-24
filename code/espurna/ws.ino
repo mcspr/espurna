@@ -357,9 +357,22 @@ void _wsOnStart(JsonObject& root) {
 
 }
 
-void _wsStart(uint32_t client_id) {
-    for (unsigned char i = 0; i < _ws_on_send_callbacks.size(); i++) {
-        wsSend(client_id, _ws_on_send_callbacks[i]);
+void _wsStart(uint32_t client_id, size_t space) {
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+
+    for (auto callback : _ws_on_send_callbacks) {
+        callback(root);
+    }
+
+    size_t len = root.measureLength();
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    AsyncWebSocketClient* client = _ws.client(client_id);
+
+    if (buffer) {
+        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        jsonBuffer.clear();
+        client->text(buffer);
     }
 }
 
@@ -380,7 +393,7 @@ void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTy
 
         IPAddress ip = client->remoteIP();
         DEBUG_MSG_P(PSTR("[WEBSOCKET] #%u connected, ip: %d.%d.%d.%d, url: %s\n"), client->id(), ip[0], ip[1], ip[2], ip[3], server->url());
-        _wsStart(client->id());
+        _wsStart(client->id(), client->client()->space());
         client->_tempObject = new WebSocketIncommingBuffer(&_wsParse, true);
         wifiReconnectCheck();
 
@@ -441,10 +454,15 @@ void wsSend(ws_on_send_callback_f callback) {
         DynamicJsonBuffer jsonBuffer;
         JsonObject& root = jsonBuffer.createObject();
         callback(root);
-        String output;
-        root.printTo(output);
-        jsonBuffer.clear();
-        _ws.textAll((char *) output.c_str());
+
+        size_t len = root.measureLength();
+        AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+
+        if (buffer) {
+            root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+            jsonBuffer.clear();
+            _ws.textAll(buffer);
+        }
     }
 }
 
@@ -466,10 +484,16 @@ void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
     DynamicJsonBuffer jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     callback(root);
-    String output;
-    root.printTo(output);
-    jsonBuffer.clear();
-    _ws.text(client_id, (char *) output.c_str());
+
+    AsyncWebSocketClient* client = _ws.client(client_id);
+
+    size_t len = root.measureLength();
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+
+    if (buffer) {
+        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        client->text(buffer);
+    }
 }
 
 void wsSend(uint32_t client_id, const char * payload) {
