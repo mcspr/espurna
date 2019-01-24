@@ -646,7 +646,7 @@ void _relayWebSocketSendRelay(JsonObject& root, unsigned char i) {
     #endif
 }
 
-void _relayWebSocketSendRelays(uint32_t client_id) {
+void _relayWebSocketSendRelays() {
     DynamicJsonBuffer jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     JsonObject& relays = root.createNestedObject("relayConfig");
@@ -668,15 +668,7 @@ void _relayWebSocketSendRelays(uint32_t client_id) {
         _relayWebSocketSendRelay(relays, i);
     }
 
-    size_t len = root.measureLength();
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
-    AsyncWebSocketClient* client = _ws.client(client_id);
-
-    if (buffer) {
-        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
-        jsonBuffer.clear();
-        client->text(buffer);
-    }
+    wsSend(root);
 }
 
 void _relayWebSocketOnStart(JsonObject& root) {
