@@ -342,8 +342,6 @@ void _wsOnStart(JsonObject& root) {
         root["sdk"] = ESP.getSdkVersion();
         root["core"] = getCoreVersion();
 
-        _wsUpdate(root);
-
         root["btnDelay"] = getSetting("btnDelay", BUTTON_DBLCLICK_DELAY).toInt();
         root["webPort"] = getSetting("webPort", WEB_PORT).toInt();
         root["wsAuth"] = getSetting("wsAuth", WS_AUTHENTICATION).toInt() == 1;
@@ -357,14 +355,18 @@ void _wsOnStart(JsonObject& root) {
 
 }
 
-void _wsStart(uint32_t client_id, size_t space) {
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+void wsSend(JsonObject& root) {
+    size_t len = root.measureLength();
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    AsyncWebSocketClient* client = _ws.client(client_id);
 
-    for (auto callback : _ws_on_send_callbacks) {
-        callback(root);
+    if (buffer) {
+        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        _ws.textAll(buffer);
     }
+}
 
+void wsSend(uint32_t client_id, JsonObject& root) {
     size_t len = root.measureLength();
     AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
     AsyncWebSocketClient* client = _ws.client(client_id);
@@ -374,6 +376,17 @@ void _wsStart(uint32_t client_id, size_t space) {
         jsonBuffer.clear();
         client->text(buffer);
     }
+}
+
+void _wsStart(uint32_t client_id, size_t space) {
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+
+    for (auto callback : _ws_on_send_callbacks) {
+        callback(root, client_id);
+    }
+
+    wsSend(root);
 }
 
 void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
@@ -455,14 +468,7 @@ void wsSend(ws_on_send_callback_f callback) {
         JsonObject& root = jsonBuffer.createObject();
         callback(root);
 
-        size_t len = root.measureLength();
-        AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
-
-        if (buffer) {
-            root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
-            jsonBuffer.clear();
-            _ws.textAll(buffer);
-        }
+        wsSend(root);
     }
 }
 

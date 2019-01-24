@@ -182,7 +182,7 @@ void webRequestRegister(web_request_callback_f callback);
 // WebSockets
 // -----------------------------------------------------------------------------
 #if WEB_SUPPORT
-    typedef std::function<void(JsonObject&)> ws_on_send_callback_f;
+    typedef std::function<void(uint32_t, JsonObject&)> ws_on_send_callback_f;
     void wsOnSendRegister(ws_on_send_callback_f callback);
     void wsSend(ws_on_send_callback_f sender);
 
@@ -204,3 +204,49 @@ void webRequestRegister(web_request_callback_f callback);
 typedef std::function<void(justwifi_messages_t code, char * parameter)> wifi_callback_f;
 void wifiRegister(wifi_callback_f callback);
 bool wifiConnected();
+
+class SystemTimestampRecorder {
+    public:
+        SystemTimestampRecorder(size_t backlog) : last(0) {
+            values.reserve(backlog);
+        }
+
+        const uint32_t& operator()() {
+            values.push_back(last ? (millis() - last) : 0);
+            last = millis();
+            return last;
+        }
+
+        void dump(Stream& stream, const char* tag) {
+            stream.print(tag);
+            for (auto ts : values) {
+                stream.print(" "); stream.print(ts);
+            }
+            stream.println();
+            clear();
+        }
+
+        using values_t = std::vector<uint32_t>;
+        using iterator = values_t::iterator;
+        using const_iterator = values_t::const_iterator;
+
+        iterator begin() { return values.begin(); }
+        iterator end() { return values.end(); }
+
+        const_iterator begin() const { return values.begin(); }
+        const_iterator end() const { return values.end(); }
+        const_iterator cbegin() const { return values.cbegin(); }
+        const_iterator cend() const { return values.cend(); }
+
+        void clear() {
+            values.clear();
+            last = 0;
+        }
+
+    private:
+        uint32_t last;
+        std::vector<uint32_t> values;
+
+};
+
+SystemTimestampRecorder recordTs(10);

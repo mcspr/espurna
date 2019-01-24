@@ -614,37 +614,68 @@ String _relayFriendlyName(unsigned char i) {
     return res;
 }
 
-void _relayWebSocketSendRelay(unsigned char i) {
+void _relayWebSocketSendRelay(JsonObject& root, unsigned char i) {
+    JsonArray& id = root.get("id");
+    JsonArray& gpio = root.get("gpio");
 
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
-    JsonArray& config = root.createNestedArray("relayConfig");
-    JsonObject& line = config.createNestedObject();
+    JsonArray& type = root.get("type");
+    JsonArray& reset = root.get("reset");
+    JsonArray& boot = root.get("boot");
 
-    line["id"] = i;
-    line["gpio"] = _relayFriendlyName(i);
-    
-    line["type"] = _relays[i].type;
-    line["reset"] = _relays[i].reset_pin;
-    line["boot"] = getSetting("relayBoot", i, RELAY_BOOT_MODE).toInt();
-    line["pulse"] = _relays[i].pulse;
-    line["pulse_ms"] = _relays[i].pulse_ms / 1000.0;
+    JsonArray& pulse = root.get("pulse");
+    JsonArray& pulse_time = root.get("pulse_time");
+
+    id.add(i);
+    gpio.add(_relayFriendlyName(i));
+
+    type.add(_relays[i].type);
+    reset.add(_relays[i].reset_pin);
+    boot.add(getSetting("relayBoot", i, RELAY_BOOT_MODE).toInt());
+
+    pulse.add(_relays[i].pulse);
+    pulse_time.add(_relays[i].pulse_ms / 1000.0);
+
     #if MQTT_SUPPORT
-        line["group"] = getSetting("mqttGroup", i, "");
-        line["group_inv"] = getSetting("mqttGroupInv", i, 0).toInt();
-        line["on_disc"] = getSetting("relayOnDisc", i, 0).toInt();
+        JsonArray& group = root.get("group");
+        JsonArray& group_inv = root.get("group_inv");
+        JsonArray& on_disconnect = root.get("on_disc");
+
+        group.add(getSetting("mqttGroup", i, ""));
+        group_inv.add(getSetting("mqttGroupInv", i, 0).toInt();
+        on_disconnect.add(getSetting("relayOnDisc", i, 0).toInt());
     #endif
-
-    String output;
-    root.printTo(output);
-    jsonBuffer.clear();
-    wsSend((char *) output.c_str());
-
 }
 
-void _relayWebSocketSendRelays() {
+void _relayWebSocketSendRelays(uint32_t client_id) {
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+    JsonObject& relays = root.createNestedObject("relayConfig");
+
+    relays.createNestedArray("gpio");
+    relays.createNestedArray("type");
+    relays.createNestedArray("reset");
+    relays.createNestedArray("boot");
+    relays.createNestedArray("pulse");
+    relays.createNestedArray("pulse_time");
+
+    #if MQTT_SUPPORT
+        relays.createNestedArray("group");
+        relays.createNestedArray("group_inv");
+        relays.createNestedArray("on_disc");
+    #endif
+
     for (unsigned char i=0; i<relayCount(); i++) {
-        _relayWebSocketSendRelay(i);
+        _relayWebSocketSendRelay(relays, i);
+    }
+
+    size_t len = root.measureLength();
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    AsyncWebSocketClient* client = _ws.client(client_id);
+
+    if (buffer) {
+        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        jsonBuffer.clear();
+        client->text(buffer);
     }
 }
 
