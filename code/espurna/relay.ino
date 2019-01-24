@@ -585,6 +585,35 @@ void _relayWebSocketUpdate(JsonObject& root) {
     }
 }
 
+String _relayFriendlyName(unsigned char i) {
+    String res = String("GPIO") + String(_relays[i].pin);
+
+    if (GPIO_NONE == _relays[i].pin) {
+        #if (RELAY_PROVIDER == RELAY_PROVIDER_LIGHT)
+            uint8_t physical = _relays.size() - DUMMY_RELAY_COUNT;
+            if (i >= physical) {
+                if (DUMMY_RELAY_COUNT == lightChannels()) {
+                    res = String("CH") + String(i-physical);
+                } else if (DUMMY_RELAY_COUNT == (lightChannels() + 1u)) {
+                    if (physical == i) {
+                        res = String("Light");
+                    } else {
+                        res = String("CH") + String(i-1-physical);
+                    }
+                } else {
+                    res = String("Light");
+                }
+            } else {
+                res = String("?");
+            }
+        #else
+            res = String("SW") + String(i);
+        #endif
+    }
+
+    return res;
+}
+
 void _relayWebSocketSendRelay(unsigned char i) {
 
     DynamicJsonBuffer jsonBuffer;
@@ -593,30 +622,7 @@ void _relayWebSocketSendRelay(unsigned char i) {
     JsonObject& line = config.createNestedObject();
 
     line["id"] = i;
-    if (GPIO_NONE == _relays[i].pin) {
-        #if (RELAY_PROVIDER == RELAY_PROVIDER_LIGHT)
-            uint8_t physical = _relays.size() - DUMMY_RELAY_COUNT;
-            if (i >= physical) {
-                if (DUMMY_RELAY_COUNT == lightChannels()) {
-                    line["gpio"] = String("CH") + String(i-physical);
-                } else if (DUMMY_RELAY_COUNT == (lightChannels() + 1u)) {
-                    if (physical == i) {
-                        line["gpio"] = String("Light");
-                    } else {
-                        line["gpio"] = String("CH") + String(i-1-physical);
-                    }
-                } else {
-                    line["gpio"] = String("Light");
-                }
-            } else {
-                line["gpio"] = String("?");
-            }
-        #else
-            line["gpio"] = String("SW") + String(i);
-        #endif
-    } else {
-        line["gpio"] = String("GPIO") + String(_relays[i].pin);
-    }
+    line["gpio"] = _relayFriendlyName(i);
     
     line["type"] = _relays[i].type;
     line["reset"] = _relays[i].reset_pin;
