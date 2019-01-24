@@ -581,7 +581,7 @@ bool _relayWebSocketOnReceive(const char * key, JsonVariant& value) {
 void _relayWebSocketUpdate(JsonObject& root) {
     JsonArray& relay = root.createNestedArray("relayStatus");
     for (unsigned char i=0; i<relayCount(); i++) {
-        relay.add(_relays[i].target_status);
+        relay.add<uint8_t>(_relays[i].target_status);
     }
 }
 
