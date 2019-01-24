@@ -356,9 +356,11 @@ void _wsOnStart(JsonObject& root) {
 }
 
 void wsSend(JsonObject& root) {
+    AsyncWebSocketClient* client = _ws.client(client_id);
+    if (client == nullptr) return;
+
     size_t len = root.measureLength();
     AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
-    AsyncWebSocketClient* client = _ws.client(client_id);
 
     if (buffer) {
         root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
@@ -367,9 +369,11 @@ void wsSend(JsonObject& root) {
 }
 
 void wsSend(uint32_t client_id, JsonObject& root) {
+    AsyncWebSocketClient* client = _ws.client(client_id);
+    if (client == nullptr) return;
+
     size_t len = root.measureLength();
     AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
-    AsyncWebSocketClient* client = _ws.client(client_id);
 
     if (buffer) {
         root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
@@ -383,10 +387,10 @@ void _wsStart(uint32_t client_id, size_t space) {
     JsonObject& root = jsonBuffer.createObject();
 
     for (auto callback : _ws_on_send_callbacks) {
-        callback(root, client_id);
+        callback(root);
     }
 
-    wsSend(root);
+    wsSend(client_id, root);
 }
 
 void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
@@ -487,11 +491,12 @@ void wsSend_P(PGM_P payload) {
 }
 
 void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
+    AsyncWebSocketClient* client = _ws.client(client_id);
+    if (client == nullptr) return;
+
     DynamicJsonBuffer jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     callback(root);
-
-    AsyncWebSocketClient* client = _ws.client(client_id);
 
     size_t len = root.measureLength();
     AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
