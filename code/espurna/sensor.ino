@@ -103,12 +103,13 @@ double _magnitudeProcess(unsigned char type, double value) {
 #if WEB_SUPPORT
 
 template<typename T>
-void _wsFillMagnitudes(JsonObject& root, T prefix) {
+void _sensorWebSocketMagnitudes(JsonObject& root, T prefix) {
 
+    // ws produces flat list <prefix>Magnitudes
     String ws_name = String(prefix);
     ws_name.concat("Magnitudes");
 
-    // cut to <prefix>Magnitude - just 1 char
+    // config uses <prefix>Magnitude<index> (cut 's')
     String conf_name = ws_name.substring(0, ws_name.length() - 1);
 
     JsonObject& list = root.createNestedObject(ws_name);
