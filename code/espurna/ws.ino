@@ -289,6 +289,20 @@ void _wsUpdate(JsonObject& root) {
     #endif
 }
 
+void _wsDoUpdate(bool reset = false) {
+    static unsigned long last = 0;
+    if (reset) {
+        last = 0;
+        return;
+    }
+
+    if (millis() - last > WS_UPDATE_INTERVAL) {
+        last = millis();
+        wsSend(_wsUpdate);
+    }
+}
+
+
 bool _wsOnReceive(const char * key, JsonVariant& value) {
     if (strncmp(key, "ws", 2) == 0) return true;
     if (strncmp(key, "admin", 5) == 0) return true;
@@ -298,60 +312,47 @@ bool _wsOnReceive(const char * key, JsonVariant& value) {
 }
 
 void _wsOnStart(JsonObject& root) {
+    char chipid[7];
+    snprintf_P(chipid, sizeof(chipid), PSTR("%06X"), ESP.getChipId());
+    uint8_t * bssid = WiFi.BSSID();
+    char bssid_str[20];
+    snprintf_P(bssid_str, sizeof(bssid_str),
+        PSTR("%02X:%02X:%02X:%02X:%02X:%02X"),
+        bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]
+    );
 
-    #if USE_PASSWORD && WEB_FORCE_PASS_CHANGE
-        bool changePassword = getAdminPass().equals(ADMIN_PASS);
-    #else
-        bool changePassword = false;
+    root["webMode"] = WEB_MODE_NORMAL;
+
+    root["app_name"] = APP_NAME;
+    root["app_version"] = APP_VERSION;
+    root["app_build"] = buildTime();
+    #if defined(APP_REVISION)
+        root["app_revision"] = APP_REVISION;
     #endif
+    root["manufacturer"] = MANUFACTURER;
+    root["chipid"] = String(chipid);
+    root["mac"] = WiFi.macAddress();
+    root["bssid"] = String(bssid_str);
+    root["channel"] = WiFi.channel();
+    root["device"] = DEVICE;
+    root["hostname"] = getSetting("hostname");
+    root["network"] = getNetwork();
+    root["deviceip"] = getIP();
+    root["sketch_size"] = ESP.getSketchSize();
+    root["free_size"] = ESP.getFreeSketchSpace();
+    root["sdk"] = ESP.getSdkVersion();
+    root["core"] = getCoreVersion();
 
-    if (changePassword) {
+    root["btnDelay"] = getSetting("btnDelay", BUTTON_DBLCLICK_DELAY).toInt();
+    root["webPort"] = getSetting("webPort", WEB_PORT).toInt();
+    root["wsAuth"] = getSetting("wsAuth", WS_AUTHENTICATION).toInt() == 1;
+    #if TERMINAL_SUPPORT
+        root["cmdVisible"] = 1;
+    #endif
+    root["hbMode"] = getSetting("hbMode", HEARTBEAT_MODE).toInt();
+    root["hbInterval"] = getSetting("hbInterval", HEARTBEAT_INTERVAL).toInt();
 
-        root["webMode"] = WEB_MODE_PASSWORD;
-
-    } else {
-
-        char chipid[7];
-        snprintf_P(chipid, sizeof(chipid), PSTR("%06X"), ESP.getChipId());
-        uint8_t * bssid = WiFi.BSSID();
-        char bssid_str[20];
-        snprintf_P(bssid_str, sizeof(bssid_str),
-            PSTR("%02X:%02X:%02X:%02X:%02X:%02X"),
-            bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]
-        );
-
-        root["webMode"] = WEB_MODE_NORMAL;
-
-        root["app_name"] = APP_NAME;
-        root["app_version"] = APP_VERSION;
-        root["app_build"] = buildTime();
-        #if defined(APP_REVISION)
-            root["app_revision"] = APP_REVISION;
-        #endif
-        root["manufacturer"] = MANUFACTURER;
-        root["chipid"] = String(chipid);
-        root["mac"] = WiFi.macAddress();
-        root["bssid"] = String(bssid_str);
-        root["channel"] = WiFi.channel();
-        root["device"] = DEVICE;
-        root["hostname"] = getSetting("hostname");
-        root["network"] = getNetwork();
-        root["deviceip"] = getIP();
-        root["sketch_size"] = ESP.getSketchSize();
-        root["free_size"] = ESP.getFreeSketchSpace();
-        root["sdk"] = ESP.getSdkVersion();
-        root["core"] = getCoreVersion();
-
-        root["btnDelay"] = getSetting("btnDelay", BUTTON_DBLCLICK_DELAY).toInt();
-        root["webPort"] = getSetting("webPort", WEB_PORT).toInt();
-        root["wsAuth"] = getSetting("wsAuth", WS_AUTHENTICATION).toInt() == 1;
-        #if TERMINAL_SUPPORT
-            root["cmdVisible"] = 1;
-        #endif
-        root["hbMode"] = getSetting("hbMode", HEARTBEAT_MODE).toInt();
-        root["hbInterval"] = getSetting("hbInterval", HEARTBEAT_INTERVAL).toInt();
-
-    }
+    _wsDoUpdate(true);
 
 }
 
@@ -378,9 +379,21 @@ void wsSend(uint32_t client_id, JsonObject& root) {
     }
 }
 
-void _wsStart(uint32_t client_id, size_t space) {
+void _wsStart(uint32_t client_id) {
+    #if USE_PASSWORD && WEB_FORCE_PASS_CHANGE
+        bool changePassword = getAdminPass().equals(ADMIN_PASS);
+    #else
+        bool changePassword = false;
+    #endif
+
     DynamicJsonBuffer jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
+
+    if (changePassword) {
+        root["webMode"] = WEB_MODE_PASSWORD;
+        wsSend(root);
+        return;
+    }
 
     for (auto callback : _ws_on_send_callbacks) {
         callback(root);
@@ -406,7 +419,7 @@ void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTy
 
         IPAddress ip = client->remoteIP();
         DEBUG_MSG_P(PSTR("[WEBSOCKET] #%u connected, ip: %d.%d.%d.%d, url: %s\n"), client->id(), ip[0], ip[1], ip[2], ip[3], server->url());
-        _wsStart(client->id(), client->client()->space());
+        _wsStart(client->id());
         client->_tempObject = new WebSocketIncommingBuffer(&_wsParse, true);
         wifiReconnectCheck();
 
@@ -434,12 +447,8 @@ void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTy
 }
 
 void _wsLoop() {
-    static unsigned long last = 0;
     if (!wsConnected()) return;
-    if (millis() - last > WS_UPDATE_INTERVAL) {
-        last = millis();
-        wsSend(_wsUpdate);
-    }
+    _wsDoUpdate();
 }
 
 // -----------------------------------------------------------------------------
