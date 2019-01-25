@@ -89,10 +89,13 @@ static bool _rfbToChar(byte * in, char * out, int n = RF_MESSAGE_SIZE) {
 #if WEB_SUPPORT
 
 void _rfbWebSocketSendCodes() {
-    JsonArray& rfb = root.createNestedArray("rfb");
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
 
-    JsonArray& on = rfb.createNestedArray();
-    JsonArray& off = rfb.createNestedArray();
+    root["size"] = relayCount();
+
+    JsonArray& on = root.createNestedArray("on");
+    JsonArray& off = root.createNestedArray("off");
 
     for (byte id=0; id<relayCount(); id++) {
         on.add(rfbRetrieve(id, true));
