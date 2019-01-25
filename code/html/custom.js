@@ -939,15 +939,19 @@ function initRelayConfig(data) {
     if (current > 0) { return; }
 
     var size = data.size;
+    var start = data.start;
+
     var template = $("#relayConfigTemplate").children();
 
-    for (var i=0; i<size; ++i) {
+    for (var i=start; i<size; ++i) {
         var line = $(template).clone();
-        $("span.gpio", line).html(data.gpio[i]);
+
         $("span.id", line).html(i);
+        $("span.gpio", line).html(data.gpio[i]);
         $("select[name='relayBoot']", line).val(data.boot[i]);
         $("select[name='relayPulse']", line).val(data.pulse[i]);
-        $("input[name='relayTime']", line).val(data.pulse_ms[i]);
+        $("input[name='relayTime']", line).val(data.pulse_time[i]);
+
         if ("group" in data) {
             $("input[name='mqttGroup']", line).val(data.group[i]);
         }
@@ -1634,7 +1638,6 @@ function connectToURL(url) {
         if (websock) { websock.close(); }
         websock = new WebSocket(urls.ws.href);
         websock.onmessage = function(evt) {
-            websock.send("{}");
             var data = getJson(evt.data.replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t"));
             if (data) {
                 processData(data);

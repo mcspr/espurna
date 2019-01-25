@@ -614,58 +614,42 @@ String _relayFriendlyName(unsigned char i) {
     return res;
 }
 
-void _relayWebSocketSendRelay(JsonObject& root, unsigned char i) {
-    JsonArray& id = root.get("id");
-    JsonArray& gpio = root.get("gpio");
-
-    JsonArray& type = root.get("type");
-    JsonArray& reset = root.get("reset");
-    JsonArray& boot = root.get("boot");
-
-    JsonArray& pulse = root.get("pulse");
-    JsonArray& pulse_time = root.get("pulse_time");
-
-    id.add(i);
-    gpio.add(_relayFriendlyName(i));
-
-    type.add(_relays[i].type);
-    reset.add(_relays[i].reset_pin);
-    boot.add(getSetting("relayBoot", i, RELAY_BOOT_MODE).toInt());
-
-    pulse.add(_relays[i].pulse);
-    pulse_time.add(_relays[i].pulse_ms / 1000.0);
-
-    #if MQTT_SUPPORT
-        JsonArray& group = root.get("group");
-        JsonArray& group_inv = root.get("group_inv");
-        JsonArray& on_disconnect = root.get("on_disc");
-
-        group.add(getSetting("mqttGroup", i, ""));
-        group_inv.add(getSetting("mqttGroupInv", i, 0).toInt();
-        on_disconnect.add(getSetting("relayOnDisc", i, 0).toInt());
-    #endif
-}
-
 void _relayWebSocketSendRelays() {
     DynamicJsonBuffer jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     JsonObject& relays = root.createNestedObject("relayConfig");
 
-    relays.createNestedArray("gpio");
-    relays.createNestedArray("type");
-    relays.createNestedArray("reset");
-    relays.createNestedArray("boot");
-    relays.createNestedArray("pulse");
-    relays.createNestedArray("pulse_time");
+    relays["size"] = relayCount();
+    relays["start"] = 0;
+
+    JsonArray& gpio = relays.createNestedArray("gpio");
+    JsonArray& type = relays.createNestedArray("type");
+    JsonArray& reset = relays.createNestedArray("reset");
+    JsonArray& boot = relays.createNestedArray("boot");
+    JsonArray& pulse = relays.createNestedArray("pulse");
+    JsonArray& pulse_time = relays.createNestedArray("pulse_time");
 
     #if MQTT_SUPPORT
-        relays.createNestedArray("group");
-        relays.createNestedArray("group_inv");
-        relays.createNestedArray("on_disc");
+        JsonArray& group = relays.createNestedArray("group");
+        JsonArray& group_inverse = relays.createNestedArray("group_inv");
+        JsonArray& on_disconnect = relays.createNestedArray("on_disc");
     #endif
 
     for (unsigned char i=0; i<relayCount(); i++) {
-        _relayWebSocketSendRelay(relays, i);
+        gpio.add(_relayFriendlyName(i));
+
+        type.add(_relays[i].type);
+        reset.add(_relays[i].reset_pin);
+        boot.add(getSetting("relayBoot", i, RELAY_BOOT_MODE).toInt());
+
+        pulse.add(_relays[i].pulse);
+        pulse_time.add(_relays[i].pulse_ms / 1000.0);
+
+        #if MQTT_SUPPORT
+            group.add(getSetting("mqttGroup", i, ""));
+            group_inverse.add(getSetting("mqttGroupInv", i, 0).toInt() == 1);
+            on_disconnect.add(getSetting("relayOnDisc", i, 0).toInt());
+        #endif
     }
 
     wsSend(root);

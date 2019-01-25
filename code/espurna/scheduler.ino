@@ -19,7 +19,7 @@ bool _schWebSocketOnReceive(const char * key, JsonVariant& value) {
     return (strncmp(key, "sch", 3) == 0);
 }
 
-void _schWebSocketOnSend(uint32_t client_id, JsonObject &root){
+void _schWebSocketOnSend(JsonObject &root){
 
     if (!relayCount()) return;
 
@@ -54,6 +54,7 @@ void _schWebSocketOnSend(uint32_t client_id, JsonObject &root){
     }
 
     schedules["size"] = size;
+    schedules["start"] = 0;
 
 }
 
