@@ -356,9 +356,6 @@ void _wsOnStart(JsonObject& root) {
 }
 
 void wsSend(JsonObject& root) {
-    AsyncWebSocketClient* client = _ws.client(client_id);
-    if (client == nullptr) return;
-
     size_t len = root.measureLength();
     AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
 
@@ -377,7 +374,6 @@ void wsSend(uint32_t client_id, JsonObject& root) {
 
     if (buffer) {
         root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
-        jsonBuffer.clear();
         client->text(buffer);
     }
 }
