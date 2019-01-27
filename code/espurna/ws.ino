@@ -73,6 +73,22 @@ bool _wsAuth(AsyncWebSocketClient * client) {
 
 }
 
+#if DEBUG_WEB_SUPPORT
+
+bool wsDebugSend(const char* message) {
+    if (!wsConnected()) return false;
+    if (getFreeHeap() < (strlen(message) * 3)) return false;
+
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject &root = jsonBuffer.createObject();
+    root.set("weblog", message);
+
+    wsSend(root);
+
+    return true;
+}
+#endif
+
 // -----------------------------------------------------------------------------
 
 #if MQTT_SUPPORT

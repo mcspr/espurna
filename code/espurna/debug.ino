@@ -16,6 +16,86 @@ char _udp_syslog_header[40] = {0};
 #endif
 #endif
 
+bool _debug_flush = false;
+
+class debug_buffer_t {
+
+    using flush_func_t = std::function<void(const char*, size_t)>;
+
+    private:
+        char* storage;
+        size_t size;
+        size_t pos;
+        flush_func_t flush_func;
+
+    public:
+        debug_buffer_t(size_t size) :
+            storage(new char[size]),
+            size(size),
+            pos(0),
+            flush_func(nullptr)
+        {}
+
+        const char* c_str() {
+            return storage;
+        }
+
+        void attachFlush(flush_func_t func) {
+            flush_func = func;
+        }
+
+        void reset() {
+            pos = 0;
+        }
+
+        void flush() {
+            if (!flush_func) return;
+            flush_func(c_str(), pos);
+            reset();
+        }
+
+        bool available() {
+            return (pos > 0);
+        }
+
+        bool append(const char* data) {
+            const size_t data_size = strlen(data);
+            if (data_size > (size - pos + 1)) {
+                flush();
+            }
+            memcpy(storage + pos, data, data_size);
+            pos += data_size;
+            storage[pos] = '\0';
+            return true;
+        }
+
+};
+
+debug_buffer_t _debug_buffer(1280);
+
+void _debugFlushLoop() {
+    if (!_debug_flush) return;
+    if (!_debug_buffer.available()) return;
+
+    _debug_buffer.flush();
+}
+
+void _debugFlush(const char* data, size_t size) {
+
+    bool pause = false;
+
+    #if DEBUG_SERIAL_SUPPORT
+        DEBUG_PORT.write(reinterpret_cast<const uint8_t*>(data), size);
+    #endif
+
+    #if DEBUG_WEB_SUPPORT
+        pause = wsDebugSend(data);
+    #endif
+
+    if (pause) optimistic_yield(100); // 0.0001s
+}
+
+
 void _debugSend(char * message) {
 
     bool pause = false;
@@ -23,15 +103,11 @@ void _debugSend(char * message) {
     #if DEBUG_ADD_TIMESTAMP
         static bool add_timestamp = true;
         char timestamp[10] = {0};
-        if (add_timestamp) snprintf_P(timestamp, sizeof(timestamp), PSTR("[%06lu] "), millis() % 1000000);
+        if (add_timestamp) {
+            snprintf_P(timestamp, sizeof(timestamp), PSTR("[%06lu] "), millis() % 1000000);
+            _debug_buffer.append(timestamp);
+        }
         add_timestamp = (message[strlen(message)-1] == 10) || (message[strlen(message)-1] == 13);
-    #endif
-
-    #if DEBUG_SERIAL_SUPPORT
-        #if DEBUG_ADD_TIMESTAMP
-            DEBUG_PORT.printf(timestamp);
-        #endif
-        DEBUG_PORT.printf(message);
     #endif
 
     #if DEBUG_UDP_SUPPORT
@@ -42,7 +118,7 @@ void _debugSend(char * message) {
             #if DEBUG_UDP_PORT == 514
                 _udp_debug.write(_udp_syslog_header);
             #endif
-            _udp_debug.write(message);
+            _udp_debug.write(_debug_buffer.c_str());
             _udp_debug.endPacket();
             pause = true;
         #if SYSTEM_CHECK_ENABLED
@@ -52,34 +128,16 @@ void _debugSend(char * message) {
 
     #if DEBUG_TELNET_SUPPORT
         #if DEBUG_ADD_TIMESTAMP
-            _telnetWrite(timestamp, strlen(timestamp));
+            _telnetWrite(timestamp, 9);
         #endif
         _telnetWrite(message, strlen(message));
         pause = true;
     #endif
 
-    #if DEBUG_WEB_SUPPORT
-        if (wsConnected() && (getFreeHeap() > 10000)) {
-            DynamicJsonBuffer jsonBuffer(JSON_OBJECT_SIZE(1) + strlen(message) + 17);
-            JsonObject &root = jsonBuffer.createObject();
-            #if DEBUG_ADD_TIMESTAMP
-                char buffer[strlen(timestamp) + strlen(message) + 1];
-                snprintf_P(buffer, sizeof(buffer), "%s%s", timestamp, message);
-                root.set("weblog", buffer);
-            #else
-                root.set("weblog", message);
-            #endif
-            String out;
-            root.printTo(out);
-            jsonBuffer.clear();
+    if (pause) optimistic_yield(100); // 0.0001s
 
-            wsSend(out.c_str());
-            pause = true;
-        }
-    #endif
-
-    if (pause) optimistic_yield(100);
-
+    _debug_buffer.append(message);
+    _debug_flush = true;
 }
 
 // -----------------------------------------------------------------------------
@@ -161,6 +219,9 @@ void debugSetup() {
             DEBUG_PORT.setDebugOutput(true);
         #endif
     #endif
+
+    _debug_buffer.attachFlush(_debugFlush);
+    espurnaRegisterLoop(_debugFlushLoop);
 
 }
 
