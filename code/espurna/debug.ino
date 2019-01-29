@@ -8,69 +8,44 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if DEBUG_SUPPORT
 
+#include "libs/DebugBuffers.h"
+
 #if DEBUG_UDP_SUPPORT
+
 #include <WiFiUdp.h>
 WiFiUDP _udp_debug;
+
 #if DEBUG_UDP_PORT == 514
 char _udp_syslog_header[40] = {0};
 #endif
+
+size_t _debugUdpSend(const char* data, size_t size) {
+    size_t res = 0;
+
+    _udp_debug.beginPacket(DEBUG_UDP_IP, DEBUG_UDP_PORT);
+    #if DEBUG_UDP_PORT == 514
+        _udp_debug.write(_udp_syslog_header);
+    #endif
+    res = _udp_debug.write(data, size);
+    _udp_debug.endPacket();
+
+    delay(0);
+
+    return res;
+}
+
+#endif // DEBUG_UDP_SEND
+
+// hide overload ambiguity for std::function + do yield
+#if DEBUG_TELNET_SUPPORT
+size_t _debugTelnetSend(const char* data, size_t size) {
+    size_t res = _telnetWrite(data, size);
+    delay(0);
+    return res;
+}
 #endif
 
 bool _debug_flush = false;
-
-class debug_buffer_t {
-
-    using flush_func_t = std::function<void(const char*, size_t)>;
-
-    private:
-        char* storage;
-        size_t size;
-        size_t pos;
-        flush_func_t flush_func;
-
-    public:
-        debug_buffer_t(size_t size) :
-            storage(new char[size]),
-            size(size),
-            pos(0),
-            flush_func(nullptr)
-        {}
-
-        const char* c_str() {
-            return storage;
-        }
-
-        void attachFlush(flush_func_t func) {
-            flush_func = func;
-        }
-
-        void reset() {
-            pos = 0;
-        }
-
-        void flush() {
-            if (!flush_func) return;
-            flush_func(c_str(), pos);
-            reset();
-        }
-
-        bool available() {
-            return (pos > 0);
-        }
-
-        bool append(const char* data) {
-            const size_t data_size = strlen(data);
-            if (data_size > (size - pos + 1)) {
-                flush();
-            }
-            memcpy(storage + pos, data, data_size);
-            pos += data_size;
-            storage[pos] = '\0';
-            return true;
-        }
-
-};
-
 debug_buffer_t _debug_buffer(1280);
 
 void _debugFlushLoop() {
@@ -78,65 +53,61 @@ void _debugFlushLoop() {
     if (!_debug_buffer.available()) return;
 
     _debug_buffer.flush();
+    yield();
 }
 
 void _debugFlush(const char* data, size_t size) {
-
-    bool pause = false;
-
     #if DEBUG_SERIAL_SUPPORT
         DEBUG_PORT.write(reinterpret_cast<const uint8_t*>(data), size);
-    #endif
-
-    #if DEBUG_WEB_SUPPORT
-        pause = wsDebugSend(data);
-    #endif
-
-    if (pause) optimistic_yield(100); // 0.0001s
-}
-
-
-void _debugSend(char * message) {
-
-    bool pause = false;
-
-    #if DEBUG_ADD_TIMESTAMP
-        static bool add_timestamp = true;
-        char timestamp[10] = {0};
-        if (add_timestamp) {
-            snprintf_P(timestamp, sizeof(timestamp), PSTR("[%06lu] "), millis() % 1000000);
-            _debug_buffer.append(timestamp);
-        }
-        add_timestamp = (message[strlen(message)-1] == 10) || (message[strlen(message)-1] == 13);
     #endif
 
     #if DEBUG_UDP_SUPPORT
         #if SYSTEM_CHECK_ENABLED
         if (systemCheck()) {
         #endif
-            _udp_debug.beginPacket(DEBUG_UDP_IP, DEBUG_UDP_PORT);
-            #if DEBUG_UDP_PORT == 514
-                _udp_debug.write(_udp_syslog_header);
-            #endif
-            _udp_debug.write(_debug_buffer.c_str());
-            _udp_debug.endPacket();
-            pause = true;
+            debug_foreach_delim(data, '\n', _debugUdpSend);
         #if SYSTEM_CHECK_ENABLED
         }
         #endif
     #endif
 
     #if DEBUG_TELNET_SUPPORT
-        #if DEBUG_ADD_TIMESTAMP
-            _telnetWrite(timestamp, 9);
-        #endif
-        _telnetWrite(message, strlen(message));
-        pause = true;
+        debug_foreach_delim(data, '\n', _debugTelnetSend);
     #endif
 
-    if (pause) optimistic_yield(100); // 0.0001s
+    #if DEBUG_WEB_SUPPORT
+        wsDebugSend(data);
+    #endif
+}
 
-    _debug_buffer.append(message);
+
+void _debugSend(char * message) {
+
+    size_t msg_len = strlen(message);
+
+    #if DEBUG_ADD_TIMESTAMP
+        constexpr size_t TIMESTAMP_LENGTH = 10;
+        std::unique_ptr<char[]> _buffer(new char[msg_len + TIMESTAMP_LENGTH]);
+    #else
+        std::unique_ptr<char[]> _buffer(new char[msg_len + 1]);
+    #endif
+
+    size_t offset = 0;
+    char* buffer = _buffer.get();
+
+    #if DEBUG_ADD_TIMESTAMP
+        static bool add_timestamp = true;
+        if (add_timestamp) {
+            snprintf_P(buffer, TIMESTAMP_LENGTH, PSTR("[%06lu] "), millis() % 1000000);
+            offset = TIMESTAMP_LENGTH - 1;
+        }
+        add_timestamp = (message[msg_len - 1] == 10) || (message[msg_len - 1] == 13);
+    #endif
+
+    memcpy(buffer + offset, message, msg_len);
+    buffer[msg_len + offset] = '\0';
+
+    _debug_buffer.append(buffer);
     _debug_flush = true;
 }
 

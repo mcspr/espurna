@@ -226,6 +226,8 @@ void _telnetConfigure() {
 void telnetSetup() {
 
     _telnetServer = new AsyncServer(TELNET_PORT);
+    // TODO allow local buffering instead of nagle?
+    //_telnetServer->setNoDelay(true);
     _telnetServer->onClient([](void *s, AsyncClient* c) {
         _telnetNewClient(c);
     }, 0);
