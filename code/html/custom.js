@@ -386,6 +386,15 @@ function setOriginalsFromValues(force) {
     });
 }
 
+function scheduleSetOriginalsFromValues(force) {
+    if (scheduleSetOriginalsFromValues.timer !== undefined) {
+        clearTimeout(scheduleSetOriginalsFromValues.timer);
+    }
+
+    scheduleSetOriginalsFromValues.timer = setTimeout(
+        setOriginalsFromValues.bind(this, force), 1000);
+}
+
 function resetOriginals() {
     setOriginalsFromValues(true);
     numReboot = numReconnect = numReload = 0;
@@ -1563,7 +1572,7 @@ function processData(data) {
         generateAPIKey();
     }
 
-    setOriginalsFromValues();
+    scheduleSetOriginalsFromValues();
 
 }
 
