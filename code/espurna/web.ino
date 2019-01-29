@@ -326,8 +326,6 @@ void _onUpgradeData(AsyncWebServerRequest *request, String filename, size_t inde
                 Update.printError(DEBUG_PORT);
             #endif
         }
-    } else {
-        DEBUG_MSG_P(PSTR("[UPGRADE] Progress: %u bytes\r"), index + len);
     }
 }
 

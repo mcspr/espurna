@@ -8,6 +8,15 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 
 #include "ArduinoOTA.h"
 
+// Basic progress reporting for terminal clients
+void _otaDebugProgress(unsigned long value, const char* tail) {
+#if DEBUG_SERIAL_SUPPORT or DEBUG_TELNET_SUPPORT
+    char buffer[128] = {0};
+    snprintf_P(buffer, 128, PSTR("[OTA] Progress: %u%s\r"), value, tail);
+    terminalSerial().print(buffer);
+#endif
+}
+
 // -----------------------------------------------------------------------------
 // Arduino OTA
 // -----------------------------------------------------------------------------
@@ -116,9 +125,7 @@ void _otaFrom(const char * host, unsigned int port, const char * url) {
         }
 
         _ota_size += len;
-        DEBUG_MSG_P(PSTR("[OTA] Progress: %u bytes\r"), _ota_size);
-
-        delay(0);
+        _otaDebugProgress(_ota_size, " bytes");
 
     }, NULL);
 
@@ -268,15 +275,17 @@ void otaSetup() {
         deferredReset(100, CUSTOM_RESET_OTA);
     });
 
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        static unsigned int _progOld;
+    #if DEBUG_SERIAL_SUPPORT
+        ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+            static unsigned int _progOld;
 
-        unsigned int _prog = (progress / (total / 100));
-        if (_prog != _progOld) {
-            DEBUG_MSG_P(PSTR("[OTA] Progress: %u%%\r"), _prog);
-            _progOld = _prog;
-        }
-    });
+            unsigned int _prog = (progress / (total / 100));
+            if (_prog != _progOld) {
+                _otaDebugProgress(_prog, "%");
+                _progOld = _prog;
+            }
+        });
+    #endif
 
     ArduinoOTA.onError([](ota_error_t error) {
         #if DEBUG_SUPPORT
