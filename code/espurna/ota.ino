@@ -142,6 +142,9 @@ void _otaFrom(const char * host, unsigned int port, const char * url) {
             }
         #endif
 
+        // Disable all UDP handlers (Alexa, etc.) keeping cpu busy
+        WiFiUDP::stopAll();
+
         // Disabling EEPROM rotation to prevent writing to EEPROM after the upgrade
         eepromRotate(false);
 

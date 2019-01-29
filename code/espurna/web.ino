@@ -296,6 +296,8 @@ void _onUpgrade(AsyncWebServerRequest *request) {
 void _onUpgradeData(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 
     if (!index) {
+        // Disable all UDP handlers (Alexa, etc.) keeping cpu busy
+        WiFiUDP::stopAll();
 
         // Disabling EEPROM rotation to prevent writing to EEPROM after the upgrade
         eepromRotate(false);
