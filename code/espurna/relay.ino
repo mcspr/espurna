@@ -89,6 +89,11 @@ void _relayProviderStatus(unsigned char id, bool status) {
         Serial.write(id + 1);
         Serial.write(status);
         Serial.write(0xA1 + status + id);
+
+        // The serial init are not full recognized by relais board.
+        // References: https://github.com/xoseperez/espurna/issues/1519 , https://github.com/xoseperez/espurna/issues/1130
+        delay(100);
+
         Serial.flush();
     #endif
 
@@ -558,6 +563,9 @@ void _relayBoot() {
 
 void _relayConfigure() {
     for (unsigned int i=0; i<_relays.size(); i++) {
+        _relays[i].pulse = getSetting("relayPulse", i, RELAY_PULSE_MODE).toInt();
+        _relays[i].pulse_ms = 1000 * getSetting("relayTime", i, RELAY_PULSE_MODE).toFloat();
+
         if (GPIO_NONE == _relays[i].pin) continue;
 
         pinMode(_relays[i].pin, OUTPUT);
@@ -568,8 +576,6 @@ void _relayConfigure() {
             //set to high to block short opening of relay
             digitalWrite(_relays[i].pin, HIGH);
         }
-        _relays[i].pulse = getSetting("relayPulse", i, RELAY_PULSE_MODE).toInt();
-        _relays[i].pulse_ms = 1000 * getSetting("relayTime", i, RELAY_PULSE_MODE).toFloat();
     }
 }
 
