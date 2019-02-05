@@ -31,8 +31,7 @@ typedef struct {
     unsigned long fw_start;     // Flood window start time
     unsigned char fw_count;     // Number of changes within the current flood window
     unsigned long change_time;  // Scheduled time to change
-    bool report;                // Whether to report to own topic
-    bool group_report;          // Whether to report to group topic
+    bool report;                // Whether to report curent status of the relay
 
     // Helping objects
 
@@ -42,6 +41,13 @@ typedef struct {
 std::vector<relay_t> _relays;
 bool _relayRecursive = false;
 Ticker _relaySaveTicker;
+
+Broker<RelayStatus> relayBroker;
+//broker_id_t _relayHandlerId = relayBroker.getId();
+
+//void relaySetBroker(const BrokerListener<RelayStatus>& broker) {
+//    _relayHandlerId = broker.getId();
+//}
 
 // -----------------------------------------------------------------------------
 // RELAY PROVIDERS
@@ -148,6 +154,13 @@ void _relayProviderStatus(unsigned char id, bool status) {
 
 }
 
+void _relayReportStatus(unsigned char id, bool status) {
+    #if BROKER_SUPPORT
+        RelayStatus event(id, status);
+        relayBroker.publish(event);
+    #endif
+}
+
 /**
  * Walks the relay vector processing only those relays
  * that have to change to the requested mode
@@ -159,7 +172,7 @@ void _relayProcess(bool mode) {
 
     for (unsigned char id = 0; id < _relays.size(); id++) {
 
-        bool target = _relays[id].target_status;
+        const bool target = _relays[id].target_status;
 
         // Only process the relays we have to change
         if (target == _relays[id].current_status) continue;
@@ -175,15 +188,10 @@ void _relayProcess(bool mode) {
         // Call the provider to perform the action
         _relayProviderStatus(id, target);
 
-        // Send to Broker
-        #if BROKER_SUPPORT
-            brokerPublish(BROKER_MSG_TYPE_STATUS, MQTT_TOPIC_RELAY, id, target ? "1" : "0");
-        #endif
-
-        // Send MQTT
-        #if MQTT_SUPPORT
-            relayMQTT(id);
-        #endif
+        // Publish current state to the Broker
+        if (_relays[id].report) {
+            _relayReportStatus(id, target);
+        }
 
         if (!_relayRecursive) {
 
@@ -195,14 +203,9 @@ void _relayProcess(bool mode) {
             bool do_commit = ((RELAY_BOOT_SAME == boot_mode) || (RELAY_BOOT_TOGGLE == boot_mode));
             _relaySaveTicker.once_ms(RELAY_SAVE_DELAY, relaySave, do_commit);
 
-            #if WEB_SUPPORT
-                wsSend(_relayWebSocketUpdate);
-            #endif
-
         }
 
         _relays[id].report = false;
-        _relays[id].group_report = false;
 
     }
 
@@ -234,6 +237,12 @@ void setSpeed(unsigned char speed) {
     }
 }
 
+void _reportSpeed(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    char buffer[5];
+    snprintf(buffer, sizeof(buffer), "%u", getSpeed());
+    mqttSend(MQTT_TOPIC_SPEED, buffer);
+}
+
 #endif
 
 // -----------------------------------------------------------------------------
@@ -262,7 +271,7 @@ void relayPulse(unsigned char id) {
 
 }
 
-bool relayStatus(unsigned char id, bool status, bool report, bool group_report) {
+bool relayStatus(unsigned char id, bool status, bool report) {
 
     if (id >= _relays.size()) return false;
 
@@ -274,14 +283,8 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
             DEBUG_MSG_P(PSTR("[RELAY] #%d scheduled change cancelled\n"), id);
             _relays[id].target_status = status;
             _relays[id].report = false;
-            _relays[id].group_report = false;
             changed = true;
         }
-
-        // For RFBridge, keep sending the message even if the status is already the required
-        #if RELAY_PROVIDER == RELAY_PROVIDER_RFBRIDGE
-            rfbStatus(id, status);
-        #endif
 
         // Update the pulse counter if the relay is already in the non-normal state (#454)
         relayPulse(id);
@@ -314,8 +317,7 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
         }
 
         _relays[id].target_status = status;
-        if (report) _relays[id].report = true;
-        if (group_report) _relays[id].group_report = true;
+        _relays[id].report = report;
 
         relaySync(id);
 
@@ -332,7 +334,11 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
 }
 
 bool relayStatus(unsigned char id, bool status) {
-    return relayStatus(id, status, true, true);
+    return relayStatus(id, status, true);
+}
+
+bool relayStatus(const RelayStatus& event) {
+    return relayStatus(event.id, event.status);
 }
 
 bool relayStatus(unsigned char id) {
@@ -423,13 +429,13 @@ void relaySave() {
     relaySave(true);
 }
 
-void relayToggle(unsigned char id, bool report, bool group_report) {
+void relayToggle(unsigned char id, bool report) {
     if (id >= _relays.size()) return;
-    relayStatus(id, !relayStatus(id), report, group_report);
+    relayStatus(id, !relayStatus(id), report);
 }
 
 void relayToggle(unsigned char id) {
-    relayToggle(id, true, true);
+    relayToggle(id, true);
 }
 
 unsigned char relayCount() {
@@ -696,7 +702,13 @@ void _relayWebSocketOnAction(uint32_t client_id, const char * action, JsonObject
 
 }
 
+// TODO throttle a bit for multile relays?
+void _relayReportWs(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    wsSend(_relayWebSocketUpdate);
+}
+
 void relaySetupWS() {
+    relayBroker.subscribe(_relayReportWs);
     wsOnSendRegister(_relayWebSocketOnStart);
     wsOnActionRegister(_relayWebSocketOnAction);
     wsOnReceiveRegister(_relayWebSocketOnReceive);
@@ -758,7 +770,7 @@ void relaySetupAPI() {
 
                 _relays[relayID].pulse_ms = pulse;
                 _relays[relayID].pulse = relayStatus(relayID) ? RELAY_PULSE_ON : RELAY_PULSE_OFF;
-                relayToggle(relayID, true, false);
+                relayToggle(relayID);
 
             }
         );
@@ -788,65 +800,79 @@ void relaySetupAPI() {
 
 #if MQTT_SUPPORT
 
-void relayMQTT(unsigned char id) {
+std::vector<bool> _relay_mqtt_state;
+std::vector<bool> _relay_mqtt_group_state;
 
-    if (id >= _relays.size()) return;
-
-    // Send state topic
-    if (_relays[id].report) {
-        _relays[id].report = false;
-        mqttSend(MQTT_TOPIC_RELAY, id, _relays[id].current_status ? RELAY_MQTT_ON : RELAY_MQTT_OFF);
+bool relayResultingStatus(unsigned char id, unsigned char value) {
+    switch (value) {
+        case 0:
+            return false;
+        case 1:
+            return true;
+        case 2:
+            return !relayStatus(id);
+        default:
+            return false;
     }
+}
 
-    // Check group topic
-    if (_relays[id].group_report) {
-        _relays[id].group_report = false;
-        String t = getSetting("mqttGroup", id, "");
-        if (t.length() > 0) {
-            bool status = relayStatus(id);
-            if (getSetting("mqttGroupInv", id, 0).toInt() == 1) status = !status;
-            mqttSendRaw(t.c_str(), status ? RELAY_MQTT_ON : RELAY_MQTT_OFF);
-        }
+bool _relayMQTTStatus(unsigned char id) {
+    return _relay_mqtt_state[id];
+}
+
+bool _relayMQTTGroupStatus(unsigned char id) {
+    return _relay_mqtt_group_state[id];
+}
+
+bool relayStatus(unsigned char, bool);
+
+void _relayMQTTStatus(unsigned char id, bool status) {
+    _relay_mqtt_state[id] = status;
+    relayStatus(id, status);
+}
+
+void _relayMQTTGroupStatus(unsigned char id, bool status) {
+    _relay_mqtt_group_state[id] = status;
+    relayStatus(id, status);
+}
+
+void _relayMQTTReport(unsigned char id, bool status) {
+    mqttSend(MQTT_TOPIC_RELAY, id, status ? RELAY_MQTT_ON : RELAY_MQTT_OFF);
+}
+
+void _relayMQTTReport(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    if (_relayMQTTStatus(event.id) == event.status) return;
+    _relayMQTTReport(event.id, event.status);
+}
+
+void _relayMQTTGroupReport(unsigned char id, bool status) {
+    String t = getSetting("mqttGroup", id, "");
+    if (t.length() > 0) {
+        if (getSetting("mqttGroupInv", id, 0).toInt() == 1) status = !status;
+        mqttSendRaw(t.c_str(), status ? RELAY_MQTT_ON : RELAY_MQTT_OFF);
     }
+}
 
-    // Send speed for IFAN02
-    #if defined (ITEAD_SONOFF_IFAN02)
-        char buffer[5];
-        snprintf(buffer, sizeof(buffer), "%u", getSpeed());
-        mqttSend(MQTT_TOPIC_SPEED, buffer);
-    #endif
-
+void _relayMQTTGroupReport(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    if (_relayMQTTGroupStatus(event.id) == event.status) return;
+    _relayMQTTGroupReport(event.id, event.status);
 }
 
 void relayMQTT() {
-    for (unsigned int id=0; id < _relays.size(); id++) {
-        mqttSend(MQTT_TOPIC_RELAY, id, _relays[id].current_status ? RELAY_MQTT_ON : RELAY_MQTT_OFF);
-    }
-}
-
-void relayStatusWrap(unsigned char id, unsigned char value, bool is_group_topic) {
-    switch (value) {
-        case 0:
-            relayStatus(id, false, mqttForward(), !is_group_topic);
-            break;
-        case 1:
-            relayStatus(id, true, mqttForward(), !is_group_topic);
-            break;
-        case 2:
-            relayToggle(id, true, true);
-            break;
-        default:
-            _relays[id].report = true;
-            relayMQTT(id);
-            break;
+    for (unsigned int id=0; id < relayCount(); id++) {
+        _relayMQTTReport(id, _relays[id].current_status);
+        _relayMQTTGroupReport(id, _relays[id].current_status);
     }
 }
 
 void relayMQTTCallback(unsigned int type, const char * topic, const char * payload) {
 
+    static Broker<RelayStatus> mqttBroker;
+
     if (type == MQTT_CONNECT_EVENT) {
 
         // Send status on connect
+        
         #if (HEARTBEAT_MODE == HEARTBEAT_NONE) or (not HEARTBEAT_REPORT_RELAY)
             relayMQTT();
         #endif
@@ -896,7 +922,7 @@ void relayMQTTCallback(unsigned int type, const char * topic, const char * paylo
 
             _relays[id].pulse_ms = pulse;
             _relays[id].pulse = relayStatus(id) ? RELAY_PULSE_ON : RELAY_PULSE_OFF;
-            relayToggle(id, true, false);
+            relayToggle(id);
 
             return;
 
@@ -904,7 +930,6 @@ void relayMQTTCallback(unsigned int type, const char * topic, const char * paylo
 
         // magnitude is relay/#
         if (t.startsWith(MQTT_TOPIC_RELAY)) {
-
             // Get relay ID
             unsigned int id = t.substring(strlen(MQTT_TOPIC_RELAY)+1).toInt();
             if (id >= relayCount()) {
@@ -916,7 +941,7 @@ void relayMQTTCallback(unsigned int type, const char * topic, const char * paylo
             unsigned char value = relayParsePayload(payload);
             if (value == 0xFF) return;
 
-            relayStatusWrap(id, value, false);
+            _relayMQTTStatus(id, relayResultingStatus(id, value));
 
             return;
         }
@@ -939,7 +964,7 @@ void relayMQTTCallback(unsigned int type, const char * topic, const char * paylo
                 }
 
                 DEBUG_MSG_P(PSTR("[RELAY] Matched group topic for relayID %d\n"), i);
-                relayStatusWrap(i, value, true);
+                _relayMQTTGroupStatus(i, relayResultingStatus(i, value));
 
             }
         }
@@ -958,10 +983,10 @@ void relayMQTTCallback(unsigned int type, const char * topic, const char * paylo
             int reaction = getSetting("relayOnDisc", i, 0).toInt();
             if (1 == reaction) {     // switch relay OFF
                 DEBUG_MSG_P(PSTR("[RELAY] Reset relay (%d) due to MQTT disconnection\n"), i);
-                relayStatusWrap(i, false, false);
+                _relayMQTTStatus(i, false);
             } else if(2 == reaction) { // switch relay ON
                 DEBUG_MSG_P(PSTR("[RELAY] Set relay (%d) due to MQTT disconnection\n"), i);
-                relayStatusWrap(i, true, false);
+                _relayMQTTStatus(i, true);
             }
         }
 
@@ -971,6 +996,24 @@ void relayMQTTCallback(unsigned int type, const char * topic, const char * paylo
 
 void relaySetupMQTT() {
     mqttRegister(relayMQTTCallback);
+
+    relayBroker.subscribe([](const Broker<RelayStatus>& broker, const RelayStatus& event) {
+        if (_relayMQTTStatus(event.id) == event.status) return;
+        _relayMQTTReport(event.id, event.status);
+    });
+
+    relayBroker.subscribe([](const Broker<RelayStatus>& broker, const RelayStatus& event) {
+        if (_relayMQTTGroupStatus(event.id) == event.status) return;
+        _relayMQTTGroupReport(event.id, event.status);
+    });
+
+    _relay_mqtt_state.reserve(relayCount());
+    _relay_mqtt_group_state.reserve(relayCount());
+
+    for (size_t n = 0; n < relayCount(); ++n) {
+        _relay_mqtt_state[n] = relayStatus(n);
+        _relay_mqtt_group_state[n] = relayStatus(n);
+    }
 }
 
 #endif
@@ -1075,6 +1118,10 @@ void relaySetup() {
     #endif
     #if TERMINAL_SUPPORT
         _relayInitCommands();
+    #endif
+
+    #ifdef ITEAD_SONOFF_IFAN02
+        relayBroker.subscribe(_reportSpeed);
     #endif
 
     // Main callbacks

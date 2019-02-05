@@ -33,23 +33,17 @@ bool _tspk_flush = false;
 unsigned long _tspk_last_flush = 0;
 unsigned char _tspk_tries = 0;
 
+std::vector<bool> _tspk_relay_state;
+
 // -----------------------------------------------------------------------------
 
 #if BROKER_SUPPORT
-void _tspkBrokerCallback(const unsigned char type, const char * topic, unsigned char id, const char * payload) {
+Broker<RelayStatus> tspkBroker;
 
-    // Process status messages
-    if (BROKER_MSG_TYPE_STATUS == type) {
-        tspkEnqueueRelay(id, (char *) payload);
-        tspkFlush();
-    }
-
-    // Porcess sensor messages
-    if (BROKER_MSG_TYPE_SENSOR == type) {
-        //tspkEnqueueMeasurement(id, (char *) payload);
-        //tspkFlush();
-    }
-
+void _tspkBrokerCallback(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    if (_tspk_relay_state[event.id] == event.status) return;
+    tspkEnqueueRelay(event.id, event.status ? "1" : "0");
+    tspkFlush();
 }
 #endif // BROKER_SUPPORT
 
@@ -95,6 +89,12 @@ void _tspkWebSocketOnSend(JsonObject& root) {
 void _tspkConfigure() {
     _tspk_clear = getSetting("tspkClear", THINGSPEAK_CLEAR_CACHE).toInt() == 1;
     _tspk_enabled = getSetting("tspkEnabled", THINGSPEAK_ENABLED).toInt() == 1;
+
+    _tspk_relay_state.reserve(relayCount());
+    for (size_t n = 0; n < relayCount(); ++n) {
+        _tspk_relay_state[n] = relayStatus(n);
+    }
+
     if (_tspk_enabled && (getSetting("tspkKey").length() == 0)) {
         _tspk_enabled = false;
         setSetting("tspkEnabled", 0);
@@ -236,7 +236,7 @@ void _tspkPost(String data) {
 
 #endif // THINGSPEAK_USE_ASYNC
 
-void _tspkEnqueue(unsigned char index, char * payload) {
+void _tspkEnqueue(unsigned char index, const char * payload) {
     DEBUG_MSG_P(PSTR("[THINGSPEAK] Enqueuing field #%d with value %s\n"), index, payload);
     --index;
     if (_tspk_queue[index] != NULL) free(_tspk_queue[index]);
@@ -278,7 +278,7 @@ void _tspkFlush() {
 
 // -----------------------------------------------------------------------------
 
-bool tspkEnqueueRelay(unsigned char index, char * payload) {
+bool tspkEnqueueRelay(unsigned char index, const char * payload) {
     if (!_tspk_enabled) return true;
     unsigned char id = getSetting("tspkRelay", index, 0).toInt();
     if (id > 0) {
@@ -288,7 +288,7 @@ bool tspkEnqueueRelay(unsigned char index, char * payload) {
     return false;
 }
 
-bool tspkEnqueueMeasurement(unsigned char index, char * payload) {
+bool tspkEnqueueMeasurement(unsigned char index, const char * payload) {
     if (!_tspk_enabled) return true;
     unsigned char id = getSetting("tspkMagnitude", index, 0).toInt();
     if (id > 0) {
@@ -316,7 +316,7 @@ void tspkSetup() {
     #endif
 
     #if BROKER_SUPPORT
-        brokerRegister(_tspkBrokerCallback);
+        tspkBroker.subscribe(_tspkBrokerCallback);
     #endif
 
     DEBUG_MSG_P(PSTR("[THINGSPEAK] Async %s, SSL %s\n"),

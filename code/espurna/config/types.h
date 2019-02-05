@@ -93,6 +93,10 @@
 #define RELAY_PROVIDER_RFBRIDGE     3
 #define RELAY_PROVIDER_STM          4
 
+#define RELAY_PAYLOAD_OFF           0
+#define RELAY_PAYLOAD_ON            1
+#define RELAY_PAYLOAD_TOGGLE        2
+
 //------------------------------------------------------------------------------
 // UDP SYSLOG
 //------------------------------------------------------------------------------

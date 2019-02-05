@@ -40,6 +40,52 @@ typedef struct {
 } channel_t;
 std::vector<channel_t> _light_channel;
 
+enum class light_type_t : unsigned char {
+    NONE,
+    W,
+    WW,
+    RGB,
+    RGBW,
+    RGBWW,
+    _MAX;
+};
+
+light_type_t lightGetType() {
+    if (lightChannels() > static_cast<unsigned char>(light_type_t::_MAX)) return light_type_t::NONE;
+    return static_cast<light_type_t>(lightChannels());
+}
+
+unsigned char lightGetChannels(light_type_t type) {
+    if (type == light_type_t::_MAX) return 0;
+    return static_cast<unsigned char>(type);
+}
+
+class LightStatus {
+
+private:
+    std::unique_ptr<unsigned char[]> values;
+
+public:
+    light_type_t type;
+
+    LightChanged(const std::vector<channel_t>& channel_list) :
+        type(lightGetType()),
+        values(new unsigned char[channel_list.size()])
+    {
+        for (size_t n=0; n<channel_list.size(); ++n) {
+            values[n] = channel_list[n].inputValue;
+        }
+    }
+
+    unsigned char get(unsigned char channel) {
+        if (channel > lightGetChannels(type)) return 0;
+        return values[channel];
+    }
+};
+
+Broker<LightStatus> lightBroker;
+
+
 bool _light_state = false;
 bool _light_use_transitions = false;
 unsigned int _light_transition_time = LIGHT_TRANSITION_TIME;
@@ -373,7 +419,7 @@ void _toHSV(char * hsv, size_t len) {
 }
 
 void _toLong(char * color, size_t len, bool target) {
-    
+
     if (!_light_has_color) return;
 
     snprintf_P(color, len, PSTR("%d,%d,%d"),
@@ -638,11 +684,8 @@ void lightMQTTGroup() {
 #if BROKER_SUPPORT
 
 void lightBroker() {
-    char buffer[10];
-    for (unsigned int i=0; i < _light_channel.size(); i++) {
-        itoa(_light_channel[i].inputValue, buffer, 10);
-        brokerPublish(BROKER_MSG_TYPE_STATUS, MQTT_TOPIC_CHANNEL, i, buffer);
-    }
+    LightChanged event(_light_channel);
+    lightBroker.publish(event);
 }
 
 #endif

@@ -1163,6 +1163,19 @@ void _sensorConfigure() {
 
 }
 
+class SensorStatus {
+public:
+    SensorStatus(const String& topic, unsigned char index, unsigned char value) :
+        topic(topic), index(index), value(value)
+    {}
+
+    const String topic;
+    const unsigned char index;
+    const unsigned char value;
+};
+
+Broker<SensorStatus> sensorBroker;
+
 void _sensorReport(unsigned char index, double value) {
 
     sensor_magnitude_t magnitude = _magnitudes[index];
@@ -1172,7 +1185,8 @@ void _sensorReport(unsigned char index, double value) {
     dtostrf(value, 1-sizeof(buffer), decimals, buffer);
 
     #if BROKER_SUPPORT
-        brokerPublish(BROKER_MSG_TYPE_SENSOR ,magnitudeTopic(magnitude.type).c_str(), magnitude.local, buffer);
+        SensorStatus event(magnitudeTopic(magnitude.type), magnitude.local, decimals);
+        sensorBroker.publish(event);
     #endif
 
     #if MQTT_SUPPORT

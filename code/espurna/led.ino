@@ -22,6 +22,8 @@ typedef struct {
 std::vector<led_t> _leds;
 bool _led_update = false;            // For relay-based modes
 
+Broker<RelayStatus> ledBroker;
+
 // -----------------------------------------------------------------------------
 
 bool _ledStatus(unsigned char id) {
@@ -74,16 +76,11 @@ void _ledWebSocketOnSend(JsonObject& root) {
 #endif
 
 #if BROKER_SUPPORT
-void _ledBrokerCallback(const unsigned char type, const char * topic, unsigned char id, const char * payload) {
 
-    // Only process status messages
-    if (BROKER_MSG_TYPE_STATUS != type) return;
-    
-    if (strcmp(MQTT_TOPIC_RELAY, topic) == 0) {
-        ledUpdate(true);
-    }
-
+void _ledBrokerCallback(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    ledUpdate(true);
 }
+
 #endif // BROKER_SUPPORT
 
 #if MQTT_SUPPORT
@@ -187,7 +184,7 @@ void ledSetup() {
     #endif
 
     #if BROKER_SUPPORT
-        brokerRegister(_ledBrokerCallback);
+        ledBroker.subscribe(_ledBrokerCallback);
     #endif
 
 

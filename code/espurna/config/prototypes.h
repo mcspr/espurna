@@ -24,7 +24,17 @@ extern "C" {
 // Broker
 // -----------------------------------------------------------------------------
 #if BROKER_SUPPORT
-    void brokerRegister(void (*)(const unsigned char, const char *, unsigned char, const char *));
+#warning yes hello
+#include "../libs/EventsBroker.h"
+class RelayStatus {
+    public:
+        RelayStatus(unsigned char id, bool status) :
+            id(id), status(status)
+        {}
+
+        const unsigned char id;
+        const bool status;
+};
 #endif
 
 // -----------------------------------------------------------------------------

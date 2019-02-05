@@ -11,6 +11,8 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 #include <ArduinoJson.h>
 
 bool _dcz_enabled = false;
+Broker<RelayStatus> domoticzBroker;
+std::vector<bool> _dcz_relay_state;
 
 //------------------------------------------------------------------------------
 // Private methods
@@ -34,6 +36,15 @@ void _domoticzMqttSubscribe(bool value) {
         mqttUnsubscribeRaw(dczTopicOut.c_str());
     }
 
+}
+
+bool _domoticzStatus(unsigned char id) {
+    return _dcz_relay_state[id];
+}
+
+void _domoticzStatus(unsigned char id, bool status) {
+    _dcz_relay_state[id] = status;
+    relayStatus(id, status);
 }
 
 void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) {
@@ -127,7 +138,7 @@ void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) 
                     if (relayID >= 0) {
                         unsigned char value = root["nvalue"];
                         DEBUG_MSG_P(PSTR("[DOMOTICZ] Received value %u for IDX %u\n"), value, idx);
-                        relayStatus(relayID, value > 0);
+                        _domoticzStatus(relayID, value > 0);
                     }
                 }
 #else
@@ -138,7 +149,7 @@ void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) 
                 if (relayID >= 0) {
                     unsigned char value = root["nvalue"];
                     DEBUG_MSG_P(PSTR("[DOMOTICZ] Received value %u for IDX %u\n"), value, idx);
-                    relayStatus(relayID, value == 1);
+                    _domoticzStatus(relayID, value == 0);
                 }
             }
 
@@ -148,19 +159,10 @@ void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) 
 
 };
 
-#if BROKER_SUPPORT
-void _domoticzBrokerCallback(const unsigned char type, const char * topic, unsigned char id, const char * payload) {
-
-    // Only process status messages
-    if (BROKER_MSG_TYPE_STATUS != type) return;
-
-    if (strcmp(MQTT_TOPIC_RELAY, topic) == 0) {
-        unsigned char value = atoi(payload);
-        domoticzSendRelay(id, value == 1);
-    }
-    
+void _domoticzBrokerCallback(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+    if (_dcz_relay_state[event.id] == event.status) return;
+    domoticzSendRelay(event.id, event.status);
 }
-#endif // BROKER_SUPPORT
 
 #if WEB_SUPPORT
 
@@ -198,6 +200,12 @@ void _domoticzWebSocketOnSend(JsonObject& root) {
 void _domoticzConfigure() {
     bool enabled = getSetting("dczEnabled", DOMOTICZ_ENABLED).toInt() == 1;
     if (enabled != _dcz_enabled) _domoticzMqttSubscribe(enabled);
+
+    _dcz_relay_state.reserve(relayCount());
+    for (size_t n = 0; n < relayCount(); ++n) {
+        _dcz_relay_state[n] = relayStatus(n);
+    }
+
     _dcz_enabled = enabled;
 }
 
@@ -221,6 +229,7 @@ template<typename T> void domoticzSend(const char * key, T nvalue) {
 
 void domoticzSendRelay(unsigned char relayID, bool status) {
     if (!_dcz_enabled) return;
+    _dcz_relay_state[relayID] = status;
     char buffer[15];
     snprintf_P(buffer, sizeof(buffer), PSTR("dczRelayIdx%u"), relayID);
     domoticzSend(buffer, status ? "1" : "0");
@@ -248,7 +257,7 @@ void domoticzSetup() {
     #endif
 
     #if BROKER_SUPPORT
-        brokerRegister(_domoticzBrokerCallback);
+        domoticzBroker.subscribe(_domoticzBrokerCallback);
     #endif
 
     // Callbacks

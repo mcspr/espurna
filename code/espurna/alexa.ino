@@ -11,6 +11,8 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 #include <fauxmoESP.h>
 fauxmoESP alexa;
 
+Broker<RelayStatus> alexaRelaysBroker;
+
 #include <queue>
 typedef struct {
     unsigned char device_id;
@@ -36,34 +38,35 @@ void _alexaConfigure() {
     alexa.enable(wifiConnected() && alexaEnabled());
 }
 
-bool _alexaBodyCallback(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    return alexa.process(request->client(), request->method() == HTTP_GET, request->url(), String((char *)data));
-}
+#if WEB_SUPPORT
+    bool _alexaBodyCallback(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        return alexa.process(request->client(), request->method() == HTTP_GET, request->url(), String((char *)data));
+    }
 
-bool _alexaRequestCallback(AsyncWebServerRequest *request) {
-    String body = (request->hasParam("body", true)) ? request->getParam("body", true)->value() : String();
-    return alexa.process(request->client(), request->method() == HTTP_GET, request->url(), body);
-}
+    bool _alexaRequestCallback(AsyncWebServerRequest *request) {
+        String body = (request->hasParam("body", true)) ? request->getParam("body", true)->value() : String();
+        return alexa.process(request->client(), request->method() == HTTP_GET, request->url(), body);
+    }
+#endif
 
 #if BROKER_SUPPORT
-void _alexaBrokerCallback(const unsigned char type, const char * topic, unsigned char id, const char * payload) {
-    
-    // Only process status messages
-    if (BROKER_MSG_TYPE_STATUS != type) return;
 
-    unsigned char value = atoi(payload);
+#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+Broker<LightStatus> alexaLightsBroker;
 
-    if (strcmp(MQTT_TOPIC_CHANNEL, topic) == 0) {
-        alexa.setState(id+1, value > 0, value);
+void _alexaLightBrokerCallback(const Broker<LightStatus>& broker, const LightStatus& event) {
+    const size_t channels = lightGetChannels(event.type);
+    for (size_t id = 0; id < channels; ++id) {
+        alexa.setState(event.id + 1, event.get(id) > 0, event.get(id));
     }
+}
+#endif
 
-    if (strcmp(MQTT_TOPIC_RELAY, topic) == 0) {
-        #if RELAY_PROVIDER == RELAY_PROVIDER_LIGHT
-            if (id > 0) return;
-        #endif
-        alexa.setState(id, value, value > 0 ? 255 : 0);
-    }
-
+void _alexaRelayBrokerCallback(const Broker<RelayStatus>& broker, const RelayStatus& event) {
+#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+        if (id > 0) return;
+#endif
+    alexa.setState(event.id, event.status, event.status ? 255 : 0);
 }
 #endif // BROKER_SUPPORT
 
@@ -79,7 +82,7 @@ void alexaSetup() {
     moveSetting("fauxmoEnabled", "alexaEnabled");
 
     // Basic fauxmoESP configuration
-    alexa.createServer(false);
+    alexa.createServer(!WEB_SUPPORT);
     alexa.setPort(80);
 
     // Uses hostname as base name for all devices
@@ -116,6 +119,8 @@ void alexaSetup() {
 
     // Websockets
     #if WEB_SUPPORT
+        webBodyRegister(_alexaBodyCallback);
+        webRequestRegister(_alexaRequestCallback);
         wsOnSendRegister(_alexaWebSocketOnSend);
         wsOnReceiveRegister(_alexaWebSocketOnReceive);
     #endif
@@ -137,10 +142,11 @@ void alexaSetup() {
     });
 
     // Register main callbacks
-    webBodyRegister(_alexaBodyCallback);
-    webRequestRegister(_alexaRequestCallback);
     #if BROKER_SUPPORT
-        brokerRegister(_alexaBrokerCallback);
+        alexaRelaysBroker.subscribe(_alexaRelayBrokerCallback);
+        #if RELAY_PROVIDER == RELAY_PROVIDER_LIGHT
+            alexaLightsBroker.subscribe(_alexaLightBrokerCallback);
+        #endif
     #endif
     espurnaRegisterReload(_alexaConfigure);
     espurnaRegisterLoop(alexaLoop);

@@ -96,6 +96,19 @@ void _ntpUpdate() {
 
 }
 
+String ntpDateTime(time_t t);
+
+class TimeChanged {
+public:
+    TimeChanged(time_t timestamp) :
+        timestamp(timestamp)
+    {}
+
+    const time_t timestamp;
+};
+
+Broker<TimeChanged> ntpTimeBroker;
+
 void _ntpLoop() {
 
     if (0 < _ntp_start && _ntp_start < millis()) _ntpStart();
@@ -108,7 +121,8 @@ void _ntpLoop() {
         static unsigned char last_minute = 60;
         if (ntpSynced() && (minute() != last_minute)) {
             last_minute = minute();
-            brokerPublish(BROKER_MSG_TYPE_DATETIME, MQTT_TOPIC_DATETIME, ntpDateTime().c_str());
+            TimeChanged event(now());
+            ntpTimeBroker.publish(event);
         }
     #endif
 
