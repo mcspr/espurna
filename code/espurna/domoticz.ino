@@ -161,7 +161,6 @@ void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) 
 };
 
 void _domoticzBrokerCallback(const Broker<RelayStatus>& broker, const RelayStatus& event) {
-    if (_dcz_relay_state[event.id] == event.status) return;
     domoticzSendRelay(event.id, event.status);
 }
 
@@ -230,6 +229,7 @@ template<typename T> void domoticzSend(const char * key, T nvalue) {
 
 void domoticzSendRelay(unsigned char relayID, bool status) {
     if (!_dcz_enabled) return;
+    if (_dcz_relay_state[relayID] == status) return;
     _dcz_relay_state[relayID] = status;
     char buffer[15];
     snprintf_P(buffer, sizeof(buffer), PSTR("dczRelayIdx%u"), relayID);
