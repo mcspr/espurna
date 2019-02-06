@@ -24,7 +24,6 @@ extern "C" {
 // Broker
 // -----------------------------------------------------------------------------
 #if BROKER_SUPPORT
-#warning yes hello
 #include "../libs/EventsBroker.h"
 class RelayStatus {
     public:
@@ -35,6 +34,7 @@ class RelayStatus {
         const unsigned char id;
         const bool status;
 };
+// TODO other ones
 #endif
 
 // -----------------------------------------------------------------------------

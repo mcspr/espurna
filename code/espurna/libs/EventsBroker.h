@@ -1,3 +1,7 @@
+#pragma once
+
+#include <vector>
+
 template <typename Event>
 class Broker {
 

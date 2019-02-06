@@ -48,7 +48,7 @@ enum class light_type_t : unsigned char {
     RGBW,
     RGBWW,
     _MAX;
-};
+}
 
 light_type_t lightGetType() {
     if (lightChannels() > static_cast<unsigned char>(light_type_t::_MAX)) return light_type_t::NONE;
