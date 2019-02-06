@@ -249,6 +249,18 @@ class RelayStatus {
         const bool status;
 };
 
+#if SENSOR_SUPPORT
+class SensorStatus {
+public:
+    SensorStatus(unsigned char index, const String& topic, const String& value) :
+        index(index), topic(topic), value(value)
+    {}
+
+    const unsigned char index;
+    const String topic;
+    const String value;
+};
+#endif
 
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 class LightStatus {

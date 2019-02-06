@@ -1163,17 +1163,6 @@ void _sensorConfigure() {
 
 }
 
-class SensorStatus {
-public:
-    SensorStatus(const String& topic, unsigned char index, unsigned char value) :
-        topic(topic), index(index), value(value)
-    {}
-
-    const String topic;
-    const unsigned char index;
-    const unsigned char value;
-};
-
 Broker<SensorStatus> sensorBroker;
 
 void _sensorReport(unsigned char index, double value) {
@@ -1181,17 +1170,16 @@ void _sensorReport(unsigned char index, double value) {
     sensor_magnitude_t magnitude = _magnitudes[index];
     unsigned char decimals = _magnitudeDecimals(magnitude.type);
 
-    char buffer[10];
-    dtostrf(value, 1-sizeof(buffer), decimals, buffer);
+    const String buffer = String(value, decimals);
 
     #if BROKER_SUPPORT
-        SensorStatus event(magnitudeTopic(magnitude.type), magnitude.local, decimals);
+        SensorStatus event(magnitude.local, magnitudeTopic(magnitude.type), buffer);
         sensorBroker.publish(event);
     #endif
 
     #if MQTT_SUPPORT
 
-        mqttSend(magnitudeTopicIndex(index).c_str(), buffer);
+        mqttSend(magnitudeTopicIndex(index).c_str(), buffer.c_str());
 
         #if SENSOR_PUBLISH_ADDRESSES
             char topic[32];
@@ -1206,7 +1194,7 @@ void _sensorReport(unsigned char index, double value) {
     #endif // MQTT_SUPPORT
 
     #if THINGSPEAK_SUPPORT
-        tspkEnqueueMeasurement(index, buffer);
+        tspkEnqueueMeasurement(index, buffer.c_str());
     #endif
 
     #if DOMOTICZ_SUPPORT
@@ -1226,9 +1214,9 @@ void _sensorReport(unsigned char index, double value) {
             }
             char status_buf[5];
             itoa(status, status_buf, 10);
-            domoticzSend(key, buffer, status_buf);
+            domoticzSend(key, buffer.c_str(), status_buf);
         } else {
-            domoticzSend(key, 0, buffer);
+            domoticzSend(key, 0, buffer.c_str());
         }
     }
     #endif // DOMOTICZ_SUPPORT
