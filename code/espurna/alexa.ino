@@ -57,14 +57,14 @@ Broker<LightStatus> alexaLightsBroker;
 void _alexaLightBrokerCallback(const Broker<LightStatus>& broker, const LightStatus& event) {
     const size_t channels = lightGetChannels(event.type);
     for (size_t id = 0; id < channels; ++id) {
-        alexa.setState(event.id + 1, event.get(id) > 0, event.get(id));
+        alexa.setState(id + 1, event.get(id) > 0, event.get(id));
     }
 }
 #endif
 
 void _alexaRelayBrokerCallback(const Broker<RelayStatus>& broker, const RelayStatus& event) {
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
-        if (id > 0) return;
+        if (event.id > 0) return;
 #endif
     alexa.setState(event.id, event.status, event.status ? 255 : 0);
 }

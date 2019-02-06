@@ -21,23 +21,6 @@ extern "C" {
 #endif
 
 // -----------------------------------------------------------------------------
-// Broker
-// -----------------------------------------------------------------------------
-#if BROKER_SUPPORT
-#include "../libs/EventsBroker.h"
-class RelayStatus {
-    public:
-        RelayStatus(unsigned char id, bool status) :
-            id(id), status(status)
-        {}
-
-        const unsigned char id;
-        const bool status;
-};
-// TODO other ones
-#endif
-
-// -----------------------------------------------------------------------------
 // Debug
 // -----------------------------------------------------------------------------
 void debugSend(const char * format, ...);
@@ -214,3 +197,82 @@ void webRequestRegister(web_request_callback_f callback);
 typedef std::function<void(justwifi_messages_t code, char * parameter)> wifi_callback_f;
 void wifiRegister(wifi_callback_f callback);
 bool wifiConnected();
+
+// -----------------------------------------------------------------------------
+// Relays
+// -----------------------------------------------------------------------------
+bool relayStatus(unsigned char, bool);
+
+// -----------------------------------------------------------------------------
+// Lights
+// -----------------------------------------------------------------------------
+#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+enum class light_type_t : unsigned char {
+    NONE,
+    W,
+    WW,
+    RGB,
+    RGBW,
+    RGBWW,
+    _MAX
+};
+
+unsigned char lightChannels();
+
+light_type_t lightGetType();
+unsigned char lightGetChannels(light_type_t);
+
+typedef struct {
+    unsigned char pin;
+    bool reverse;
+    bool state;
+    unsigned char inputValue;   // value that has been inputted
+    unsigned char value;        // normalized value including brightness
+    unsigned char target;       // target value
+    double current;             // transition value
+} channel_t;
+
+#endif
+
+// -----------------------------------------------------------------------------
+// Broker
+// -----------------------------------------------------------------------------
+#if BROKER_SUPPORT
+#include "../libs/EventsBroker.h"
+class RelayStatus {
+    public:
+        RelayStatus(unsigned char id, bool status) :
+            id(id), status(status)
+        {}
+
+        const unsigned char id;
+        const bool status;
+};
+
+
+#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+class LightStatus {
+    public:
+        LightStatus(const std::vector<channel_t>& channel_list) :
+            type(lightGetType()),
+            values(new unsigned char[channel_list.size()])
+        {
+            for (size_t n=0; n<channel_list.size(); ++n) {
+                values[n] = channel_list[n].inputValue;
+            }
+        }
+
+        unsigned char get(unsigned char channel) const {
+            if (channel > lightGetChannels(type)) return 0;
+            return values[channel];
+        }
+
+        light_type_t type;
+
+    private:
+        std::unique_ptr<unsigned char[]> values;
+};
+
+#endif
+
+#endif

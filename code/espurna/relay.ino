@@ -830,8 +830,6 @@ bool _relayMQTTGroupStatus(unsigned char id) {
     return _relay_mqtt_group_state[id];
 }
 
-bool relayStatus(unsigned char, bool);
-
 void _relayMQTTStatus(unsigned char id, bool status) {
     _relay_mqtt_state[id] = status;
     relayStatus(id, status);

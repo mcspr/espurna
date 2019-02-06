@@ -29,26 +29,9 @@ Ticker _light_comms_ticker;
 Ticker _light_save_ticker;
 Ticker _light_transition_ticker;
 
-typedef struct {
-    unsigned char pin;
-    bool reverse;
-    bool state;
-    unsigned char inputValue;   // value that has been inputted
-    unsigned char value;        // normalized value including brightness
-    unsigned char target;       // target value
-    double current;             // transition value
-} channel_t;
 std::vector<channel_t> _light_channel;
 
-enum class light_type_t : unsigned char {
-    NONE,
-    W,
-    WW,
-    RGB,
-    RGBW,
-    RGBWW,
-    _MAX
-};
+Broker<LightStatus> lightBroker;
 
 light_type_t lightGetType() {
     if (lightChannels() > static_cast<unsigned char>(light_type_t::_MAX)) return light_type_t::NONE;
@@ -59,31 +42,6 @@ unsigned char lightGetChannels(light_type_t type) {
     if (type == light_type_t::_MAX) return 0;
     return static_cast<unsigned char>(type);
 }
-
-class LightStatus {
-
-private:
-    std::unique_ptr<unsigned char[]> values;
-
-public:
-    light_type_t type;
-
-    LightChanged(const std::vector<channel_t>& channel_list) :
-        type(lightGetType()),
-        values(new unsigned char[channel_list.size()])
-    {
-        for (size_t n=0; n<channel_list.size(); ++n) {
-            values[n] = channel_list[n].inputValue;
-        }
-    }
-
-    unsigned char get(unsigned char channel) {
-        if (channel > lightGetChannels(type)) return 0;
-        return values[channel];
-    }
-};
-
-Broker<LightStatus> lightBroker;
 
 
 bool _light_state = false;
@@ -683,8 +641,8 @@ void lightMQTTGroup() {
 
 #if BROKER_SUPPORT
 
-void lightBroker() {
-    LightChanged event(_light_channel);
+void lightSendBroker() {
+    LightStatus event(_light_channel);
     lightBroker.publish(event);
 }
 
@@ -717,7 +675,7 @@ void _lightComms(unsigned char mask) {
 
     // Report channels to local broker
     #if BROKER_SUPPORT
-        lightBroker();
+        lightSendBroker();
     #endif
 
 }
