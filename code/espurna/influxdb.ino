@@ -39,8 +39,10 @@ void _idbConfigure() {
 }
 
 #if BROKER_SUPPORT
+Broker<SensorStatus> idbBroker;
+
 void _idbBrokerCallback(const Broker<SensorStatus>& broker, const SensorStatus& event) {
-    idbSend(event.topic.c_str(), event.index, (char *) payload);
+    idbSend(event.topic.c_str(), event.index, event.value.c_str());
 }
 #endif // BROKER_SUPPORT
 
@@ -115,7 +117,7 @@ void idbSetup() {
     #endif
 
     #if BROKER_SUPPORT
-        orokerRegister(_idbBrokerCallback);
+        idbBroker.subscribe(_idbBrokerCallback);
     #endif
 
     // Main callbacks

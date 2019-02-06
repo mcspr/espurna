@@ -219,8 +219,15 @@ enum class light_type_t : unsigned char {
 
 unsigned char lightChannels();
 
-light_type_t lightGetType();
-unsigned char lightGetChannels(light_type_t);
+light_type_t lightGetType() {
+    if (lightChannels() > static_cast<unsigned char>(light_type_t::_MAX)) return light_type_t::NONE;
+    return static_cast<light_type_t>(lightChannels());
+}
+
+unsigned char lightGetChannels(light_type_t type) {
+    if (type == light_type_t::_MAX) return 0;
+    return static_cast<unsigned char>(type);
+}
 
 typedef struct {
     unsigned char pin;
@@ -249,7 +256,6 @@ class RelayStatus {
         const bool status;
 };
 
-#if SENSOR_SUPPORT
 class SensorStatus {
 public:
     SensorStatus(unsigned char index, const String& topic, const String& value) :
@@ -260,7 +266,6 @@ public:
     const String topic;
     const String value;
 };
-#endif
 
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 class LightStatus {

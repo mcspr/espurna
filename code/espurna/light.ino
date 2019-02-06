@@ -33,17 +33,6 @@ std::vector<channel_t> _light_channel;
 
 Broker<LightStatus> lightBroker;
 
-light_type_t lightGetType() {
-    if (lightChannels() > static_cast<unsigned char>(light_type_t::_MAX)) return light_type_t::NONE;
-    return static_cast<light_type_t>(lightChannels());
-}
-
-unsigned char lightGetChannels(light_type_t type) {
-    if (type == light_type_t::_MAX) return 0;
-    return static_cast<unsigned char>(type);
-}
-
-
 bool _light_state = false;
 bool _light_use_transitions = false;
 unsigned int _light_transition_time = LIGHT_TRANSITION_TIME;
