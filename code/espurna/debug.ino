@@ -84,40 +84,6 @@ void _debugSend(char * message) {
 
 // -----------------------------------------------------------------------------
 
-void debugSend(const char * format, ...) {
-
-    va_list args;
-    va_start(args, format);
-    char test[1];
-    int len = ets_vsnprintf(test, 1, format, args) + 1;
-    char * buffer = new char[len];
-    ets_vsnprintf(buffer, len, format, args);
-    va_end(args);
-
-    _debugSend(buffer);
-
-    delete[] buffer;
-
-}
-
-void debugSend_P(PGM_P format_P, ...) {
-
-    char format[strlen_P(format_P)+1];
-    memcpy_P(format, format_P, sizeof(format));
-
-    va_list args;
-    va_start(args, format_P);
-    char test[1];
-    int len = ets_vsnprintf(test, 1, format, args) + 1;
-    char * buffer = new char[len];
-    ets_vsnprintf(buffer, len, format, args);
-    va_end(args);
-
-    _debugSend(buffer);
-
-    delete[] buffer;
-
-}
 
 #if DEBUG_WEB_SUPPORT
 
