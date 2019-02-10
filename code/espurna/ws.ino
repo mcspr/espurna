@@ -363,6 +363,7 @@ void _wsStart(uint32_t client_id) {
     for (unsigned char i = 0; i < _ws_on_send_callbacks.size(); i++) {
         wsSend(client_id, _ws_on_send_callbacks[i]);
     }
+    wsSend_P(client_id, PSTR("{\"action\": \"configure\"}"));
 }
 
 void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){

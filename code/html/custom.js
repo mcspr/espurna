@@ -277,8 +277,12 @@ function getData(form) {
 
     var data = {};
 
-    // Populate data
+    // Gather changed inputs
     $("input,select", form).each(function() {
+        if ("true" !== $(this).attr("hasChanged")) {
+            return;
+        }
+
         var name = $(this).attr("name");
         var value = getValue(this);
         if (null !== value) {
@@ -1183,6 +1187,7 @@ function processData(data) {
 
         if ("action" === key) {
             if ("reload" === data.action) { doReload(1000); }
+            if ("configure" === data.action) { setOriginalsFromValues(); }
             return;
         }
 
@@ -1545,8 +1550,6 @@ function processData(data) {
     if ($("input[name='apiKey']").val() === "") {
         generateAPIKey();
     }
-
-    setOriginalsFromValues();
 
 }
 
