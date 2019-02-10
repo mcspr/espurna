@@ -476,7 +476,10 @@ unsigned char relayParsePayload(const char * payload) {
 }
 
 // BACKWARDS COMPATIBILITY
+// TODO pending removal
 void _relayBackwards() {
+
+    if (!hasSetting("relayMode")) return;
 
     byte relayMode = getSetting("relayMode", RELAY_BOOT_MODE).toInt();
     byte relayPulseMode = getSetting("relayPulseMode", RELAY_PULSE_MODE).toInt();
