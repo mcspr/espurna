@@ -380,9 +380,9 @@ function sendConfig(data) {
     websock.send(JSON.stringify({config: data}));
 }
 
-function setOriginalsFromValues(force) {
+function setOriginalsFromValues(context, force) {
     var force = (true === force);
-    $("input,select").each(function() {
+    $("input,select", context).each(function() {
         var initial = (undefined === $(this).attr("original"));
         if (force || initial) {
             $(this).attr("original", $(this).val());
@@ -391,7 +391,7 @@ function setOriginalsFromValues(force) {
 }
 
 function resetOriginals() {
-    setOriginalsFromValues(true);
+    setOriginalsFromValues(undefined, true);
     numReboot = numReconnect = numReload = 0;
 }
 
@@ -1210,7 +1210,9 @@ function processData(data) {
             var nodes = data.rfb;
             for (i in nodes) {
                 var node = nodes[i];
-                $("input[name='rfbcode'][data-id='" + node.id + "'][data-status='" + node.status + "']").val(node.data);
+                var elem = $(`input[name='rfbcode'][data-id='${node.id}'][data-status='${node.status}']`);
+                elem.val(node.data);
+                setOriginalsFromValues(elem, true);
             }
             return;
         }
