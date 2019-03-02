@@ -52,6 +52,11 @@ bool _webConfigSuccess = false;
 std::vector<web_request_callback_f> _web_request_callbacks;
 std::vector<web_body_callback_f> _web_body_callbacks;
 
+#define WEB_ASSERT_AUTH(request) \
+    if (!webAuthenticate(request)) { \
+        return request->requestAuthentication(getSetting("hostname").c_str()); \
+    }
+
 // -----------------------------------------------------------------------------
 // HOOKS
 // -----------------------------------------------------------------------------
@@ -214,6 +219,18 @@ void _onHome(AsyncWebServerRequest *request) {
         request->send(response);
 
     }
+
+}
+#endif
+
+#if DEBUG_CRASH_RECORDER
+void _webOnCrash(AsyncWebServerRequest *request) {
+
+    WEB_ASSERT_AUTH(request);
+
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    crashDump(*response);
+    request->send(response);
 
 }
 #endif
@@ -422,6 +439,9 @@ void webSetup() {
     _server->on("/config", HTTP_POST | HTTP_PUT, _onPostConfig, _onPostConfigData);
     _server->on("/upgrade", HTTP_POST, _onUpgrade, _onUpgradeData);
     _server->on("/discover", HTTP_GET, _onDiscover);
+    #if DEBUG_CRASH_RECORDER
+        _server->on("/crash", HTTP_GET, _webOnCrash);
+    #endif
 
     // Serve static files
     #if SPIFFS_SUPPORT

@@ -4,11 +4,11 @@
 // https://github.com/krzychb/EspSaveCrash
 // -----------------------------------------------------------------------------
 
-#if DEBUG_SUPPORT
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <EEPROM_Rotate.h>
+
+#include "libs/PrintWrap.h"
 
 extern "C" {
     #include "user_interface.h"
@@ -49,6 +49,7 @@ extern "C" {
  * This function is called automatically if ESP8266 suffers an exception
  * It should be kept quick / consise to be able to execute before hardware wdt may kick in
  */
+#if DEBUG_CRASH_RECORDER
 extern "C" void custom_crash_callback(struct rst_info * rst_info, uint32_t stack_start, uint32_t stack_end ) {
 
     // Do not record crash data when resetting the board
@@ -92,6 +93,7 @@ extern "C" void custom_crash_callback(struct rst_info * rst_info, uint32_t stack
     EEPROMr.commit();
 
 }
+#endif
 
 /**
  * Clears crash info
@@ -105,18 +107,23 @@ void crashClear() {
 /**
  * Print out crash information that has been previusly saved in EEPROM
  */
-void crashDump() {
+#if defined(ARDUINO_ESP8266_RELEASE_2_3_0)
+void crashDump(Print& orig_printable) {
+    PrintWrap printable(orig_printable);
+#else
+void crashDump(Print& printable) {
+#endif
 
     uint32_t crash_time;
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_CRASH_TIME, crash_time);
     if ((crash_time == 0) || (crash_time == 0xFFFFFFFF)) {
-        DEBUG_MSG_P(PSTR("[DEBUG] No crash info\n"));
+        printable.printf_P(PSTR("[DEBUG] No crash info\n"));
         return;
     }
 
-    DEBUG_MSG_P(PSTR("[DEBUG] Latest crash was at %lu ms after boot\n"), crash_time);
-    DEBUG_MSG_P(PSTR("[DEBUG] Reason of restart: %u\n"), EEPROMr.read(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_RESTART_REASON));
-    DEBUG_MSG_P(PSTR("[DEBUG] Exception cause: %u\n"), EEPROMr.read(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_EXCEPTION_CAUSE));
+    printable.printf_P(PSTR("[DEBUG] Latest crash was at %lu ms after boot\n"), crash_time);
+    printable.printf_P(PSTR("[DEBUG] Reason of restart: %u\n"), EEPROMr.read(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_RESTART_REASON));
+    printable.printf_P(PSTR("[DEBUG] Exception cause: %u\n"), EEPROMr.read(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_EXCEPTION_CAUSE));
 
     uint32_t epc1, epc2, epc3, excvaddr, depc;
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_EPC1, epc1);
@@ -125,33 +132,31 @@ void crashDump() {
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_EXCVADDR, excvaddr);
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_DEPC, depc);
 
-    DEBUG_MSG_P(PSTR("[DEBUG] epc1=0x%08x epc2=0x%08x epc3=0x%08x\n"), epc1, epc2, epc3);
-    DEBUG_MSG_P(PSTR("[DEBUG] excvaddr=0x%08x depc=0x%08x\n"), excvaddr, depc);
+    printable.printf_P(PSTR("[DEBUG] epc1=0x%08x epc2=0x%08x epc3=0x%08x\n"), epc1, epc2, epc3);
+    printable.printf_P(PSTR("[DEBUG] excvaddr=0x%08x depc=0x%08x\n"), excvaddr, depc);
 
     uint32_t stack_start, stack_end;
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_STACK_START, stack_start);
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_STACK_END, stack_end);
 
-    DEBUG_MSG_P(PSTR("[DEBUG] sp=0x%08x end=0x%08x\n"), stack_start, stack_end);
+    printable.printf_P(PSTR("[DEBUG] sp=0x%08x end=0x%08x\n"), stack_start, stack_end);
 
     int16_t current_address = SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_STACK_TRACE;
     int16_t stack_len = stack_end - stack_start;
 
     uint32_t stack_trace;
 
-    DEBUG_MSG_P(PSTR("[DEBUG] >>>stack>>>\n[DEBUG] "));
+    printable.printf_P(PSTR("[DEBUG] >>>stack>>>\n[DEBUG] "));
 
     for (int16_t i = 0; i < stack_len; i += 0x10) {
-        DEBUG_MSG_P(PSTR("%08x: "), stack_start + i);
+        printable.printf_P(PSTR("%08x: "), stack_start + i);
         for (byte j = 0; j < 4; j++) {
             EEPROMr.get(current_address, stack_trace);
-            DEBUG_MSG_P(PSTR("%08x "), stack_trace);
+            printable.printf_P(PSTR("%08x "), stack_trace);
             current_address += 4;
         }
-        DEBUG_MSG_P(PSTR("\n[DEBUG] "));
+        printable.printf_P(PSTR("\n[DEBUG] "));
     }
-    DEBUG_MSG_P(PSTR("<<<stack<<<\n"));
+    printable.printf_P(PSTR("<<<stack<<<\n"));
 
 }
-
-#endif // DEBUG_SUPPORT

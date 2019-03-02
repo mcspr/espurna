@@ -6,6 +6,10 @@
 
 #define DEBUG_SUPPORT           DEBUG_SERIAL_SUPPORT || DEBUG_UDP_SUPPORT || DEBUG_TELNET_SUPPORT || DEBUG_WEB_SUPPORT
 
+#ifndef DEBUG_CRASH_RECORDER
+#define DEBUG_CRASH_RECORDER    1
+#endif
+
 #if DEBUG_SUPPORT
     #define DEBUG_MSG(...) debugSend(__VA_ARGS__)
     #define DEBUG_MSG_P(...) debugSend_P(__VA_ARGS__)
