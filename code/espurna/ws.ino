@@ -380,10 +380,6 @@ void _wsOnStart(JsonObject& root) {
 }
 
 void wsSend(JsonObject& root) {
-    root["heap"] = getFreeHeap();
-    root["stack"] = getFreeStack();
-    root["len"] = root.measureLength();
-
     size_t len = root.measureLength();
     AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
 
