@@ -81,7 +81,9 @@ void _terminalInitCommand() {
 
     #if DEBUG_SUPPORT
         terminalRegisterCommand(F("CRASH"), [](Embedis* e) {
-            crashDump();
+            #if DEBUG_SERIAL_SUPPORT
+                crashDump(DEBUG_PORT);
+            #endif
             crashClear();
             terminalOK();
         });
