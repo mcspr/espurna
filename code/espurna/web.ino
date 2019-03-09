@@ -221,6 +221,7 @@ void _onHome(AsyncWebServerRequest *request) {
 }
 #endif
 
+#if DEBUG_CRASH_RECORDER
 void _webOnCrash(AsyncWebServerRequest *request) {
 
     WEB_ASSERT_AUTH(request);
@@ -230,19 +231,7 @@ void _webOnCrash(AsyncWebServerRequest *request) {
     request->send(response);
 
 }
-
-void _webForceCrash(AsyncWebServerRequest *request) {
-
-    WEB_ASSERT_AUTH(request);
-
-    yield();
-
-    AsyncResponseStream *response = request->beginResponseStream("text/plain");
-    response->write(F("CRASH HERE\n"));
-    request->send(response);
-
-}
-
+#endif
 
 #if ASYNC_TCP_SSL_ENABLED & WEB_SSL_ENABLED
 
@@ -448,8 +437,9 @@ void webSetup() {
     _server->on("/config", HTTP_POST | HTTP_PUT, _onPostConfig, _onPostConfigData);
     _server->on("/upgrade", HTTP_POST, _onUpgrade, _onUpgradeData);
     _server->on("/discover", HTTP_GET, _onDiscover);
-    _server->on("/crash", HTTP_GET, _webOnCrash);
-    _server->on("/force_crash_dump", HTTP_GET, _webForceCrash);
+    #if DEBUG_CRASH_RECORDER
+        _server->on("/crash", HTTP_GET, _webOnCrash);
+    #endif
 
     // Serve static files
     #if SPIFFS_SUPPORT

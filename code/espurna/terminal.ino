@@ -79,7 +79,7 @@ void _terminalKeysCommand() {
 
 void _terminalInitCommand() {
 
-    #if DEBUG_SUPPORT
+    #if DEBUG_CRASH_RECORDER
         terminalRegisterCommand(F("CRASH"), [](Embedis* e) {
             crashDump(terminalSerial());
             crashClear();
