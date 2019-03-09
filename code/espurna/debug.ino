@@ -12,6 +12,8 @@ Copyright (C) 2016-2018 by Xose Pérez <xose dot perez at gmail dot com>
 #include <stdarg.h>
 #include <EEPROM_Rotate.h>
 
+#include "libs/PrintWrap.h"
+
 extern "C" {
     #include "user_interface.h"
 }
@@ -166,6 +168,8 @@ void debugSetup() {
 
 }
 
+#endif // DEBUG_SUPPORT
+
 // -----------------------------------------------------------------------------
 // Save crash info
 // Taken from krzychb EspSaveCrash
@@ -207,6 +211,8 @@ void debugSetup() {
  * This function is called automatically if ESP8266 suffers an exception
  * It should be kept quick / consise to be able to execute before hardware wdt may kick in
  */
+#if DEBUG_CRASH_RECORDER
+
 extern "C" void custom_crash_callback(struct rst_info * rst_info, uint32_t stack_start, uint32_t stack_end ) {
 
     // Do not record crash data when resetting the board
@@ -251,6 +257,8 @@ extern "C" void custom_crash_callback(struct rst_info * rst_info, uint32_t stack
 
 }
 
+#endif // DEBUG_CRASH_RECORDER
+
 /**
  * Clears crash info
  */
@@ -263,7 +271,12 @@ void debugClearCrashInfo() {
 /**
  * Print out crash information that has been previusly saved in EEPROM
  */
+#if defined(ARDUINO_ESP8266_RELEASE_2_3_0)
+void debugDumpCrashInfo(Print& orig_printable) {
+    PrintWrap printable(orig_printable);
+#else
 void debugDumpCrashInfo(Print& printable) {
+#endif
 
     uint32_t crash_time;
     EEPROMr.get(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_CRASH_TIME, crash_time);
@@ -311,5 +324,3 @@ void debugDumpCrashInfo(Print& printable) {
     printable.printf_P(PSTR("<<<stack<<<\n"));
 
 }
-
-#endif // DEBUG_SUPPORT

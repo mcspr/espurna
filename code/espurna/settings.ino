@@ -171,7 +171,7 @@ void _settingsFactoryResetCommand() {
 
 void _settingsInitCommands() {
 
-    #if DEBUG_SUPPORT
+    #if DEBUG_CRASH_RECORDER
         settingsRegisterCommand(F("CRASH"), [](Embedis* e) {
             debugDumpCrashInfo(settingsSerial());
             debugClearCrashInfo();
