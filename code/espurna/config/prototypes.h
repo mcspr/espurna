@@ -151,6 +151,7 @@ Stream & settingsSerial();
 // -----------------------------------------------------------------------------
 char * ltrim(char * s);
 void nice_delay(unsigned long ms);
+bool inline eraseSDKConfig();
 
 #define ARRAYINIT(type, name, ...) type name[] = {__VA_ARGS__};
 
