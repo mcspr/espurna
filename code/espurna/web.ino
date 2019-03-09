@@ -225,7 +225,7 @@ void _webOnCrash(AsyncWebServerRequest *request) {
     WEB_ASSERT_AUTH(request);
 
     AsyncResponseStream *response = request->beginResponseStream("text/plain");
-    crashDump(*response);
+    debugDumpCrashInfo(*response);
     request->send(response);
 
 }
