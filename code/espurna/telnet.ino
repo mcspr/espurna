@@ -171,8 +171,6 @@ void _telnetNewClient(AsyncClient *client) {
             #if TERMINAL_SUPPORT == 0
                 info();
                 wifiDebug();
-                debugDumpCrashInfo();
-                debugClearCrashInfo();
             #endif
 
             #if TELNET_PASSWORD

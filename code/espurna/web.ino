@@ -213,6 +213,15 @@ void _onHome(AsyncWebServerRequest *request) {
 }
 #endif
 
+void _webOnCrash(AsyncWebServerRequest *request) {
+
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    crashDump(*response);
+    request->send(response);
+
+}
+
+
 #if ASYNC_TCP_SSL_ENABLED & WEB_SSL_ENABLED
 
 int _onCertificate(void * arg, const char *filename, uint8_t **buf) {
@@ -401,6 +410,7 @@ void webSetup() {
     _server->on("/config", HTTP_POST | HTTP_PUT, _onPostConfig, _onPostConfigData);
     _server->on("/upgrade", HTTP_POST, _onUpgrade, _onUpgradeData);
     _server->on("/discover", HTTP_GET, _onDiscover);
+    _server->on("/crash", HTTP_GET, _webOnCrash);
 
     // Serve static files
     #if SPIFFS_SUPPORT
