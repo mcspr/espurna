@@ -313,7 +313,7 @@ void _wsUpdate(JsonObject& root) {
 void _wsDoUpdate(bool reset = false) {
     static unsigned long last = 0;
     if (reset) {
-        last = 0;
+        last = millis() + WS_UPDATE_INTERVAL;
         return;
     }
 
