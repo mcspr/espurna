@@ -351,6 +351,7 @@ void i2cScan() {
     if (nDevices == 0) DEBUG_MSG_P(PSTR("[I2C] No devices found\n"));
 }
 
+#if TERMINAL_SUPPORT
 void i2cCommands() {
 
     terminalRegisterCommand(F("I2C.SCAN"), [](Embedis* e) {
@@ -364,6 +365,7 @@ void i2cCommands() {
     });
 
 }
+#endif // TERMINAL_SUPPORT
 
 void i2cSetup() {
 
