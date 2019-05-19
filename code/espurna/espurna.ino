@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 std::vector<void (*)()> _loop_callbacks;
 std::vector<void (*)()> _reload_callbacks;
 
+bool _reload_config = false;
 unsigned long _loop_delay = 0;
 
 // -----------------------------------------------------------------------------
@@ -39,10 +40,14 @@ void espurnaRegisterReload(void (*callback)()) {
     _reload_callbacks.push_back(callback);
 }
 
-void espurnaReload() {
+void _espurnaReload() {
     for (unsigned char i = 0; i < _reload_callbacks.size(); i++) {
         (_reload_callbacks[i])();
     }
+}
+
+void espurnaReload() {
+    _reload_config = true;
 }
 
 unsigned long espurnaLoopDelay() {
@@ -227,6 +232,12 @@ void setup() {
 }
 
 void loop() {
+
+    // Reload config before running any callbacks
+    if (_reload_config) {
+        _espurnaReload();
+        _reload_config = false;
+    }
 
     // Call registered loop callbacks
     for (unsigned char i = 0; i < _loop_callbacks.size(); i++) {
