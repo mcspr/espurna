@@ -224,7 +224,7 @@ void _onHome(AsyncWebServerRequest *request) {
 #endif
 
 #if DEBUG_CRASH_RECORDER
-void _webOnCrash(AsyncWebServerRequest *request) {
+void _webOnCrashlog(AsyncWebServerRequest *request) {
 
     WEB_ASSERT_AUTH(request);
 
@@ -440,7 +440,7 @@ void webSetup() {
     _server->on("/upgrade", HTTP_POST, _onUpgrade, _onUpgradeData);
     _server->on("/discover", HTTP_GET, _onDiscover);
     #if DEBUG_CRASH_RECORDER
-        _server->on("/crash", HTTP_GET, _webOnCrash);
+        _server->on("/debug/crashlog", HTTP_GET, _webOnCrashlog);
     #endif
 
     // Serve static files
