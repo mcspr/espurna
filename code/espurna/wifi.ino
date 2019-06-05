@@ -424,6 +424,16 @@ void _wifiInitCommands() {
         terminalOK();
     });
 
+    terminalRegisterCommand(F("LWIP.PCBS"), [](Embedis* e) {
+        debug_tcp_print_pcbs();
+        terminalOK();
+    });
+
+    terminalRegisterCommand(F("LWIP.REMOVEALL"), [](Embedis* e) {
+        debug_tcp_remove_all();
+        terminalOK();
+    });
+
 }
 
 #endif
