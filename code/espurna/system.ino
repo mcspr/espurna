@@ -164,7 +164,8 @@ void _systemSetupHeartbeat() {
 
 #if WEB_SUPPORT
     bool _systemWebSocketOnReceive(const char * key, JsonVariant& value) {
-        return (strncmp(key, "hb", 2) == 0);
+        if (strncmp(key, "sys", 3) == 0) return true;
+        if (strncmp(key, "hb", 2) == 0) return true;
     }
 #endif
 

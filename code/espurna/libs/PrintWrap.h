@@ -1,6 +1,11 @@
+#pragma once
+
 #include <Print.h>
 
+#if defined(ARDUINO_ESP8266_RELEASE_2_3_0)
+
 class PrintWrap {
+
     public:
         
         PrintWrap(Print& target)
@@ -32,4 +37,35 @@ class PrintWrap {
 
     private:
         Print& target;
+
+};
+
+#endif
+
+class DebugPrinter : public Print, public String {
+
+    public:
+
+        ~DebugPrinter() {
+            flush();
+        }
+
+        void setFlush(size_t size) {
+            flush_size = size;
+        }
+
+        size_t write(uint8_t data) {
+            if (length() >= flush_size) flush();
+            return concat((char) data);
+        }
+
+        void flush() {
+            debugSend(c_str());
+            copy("", 0);
+        }
+
+    private:
+
+        size_t flush_size = 256;
+
 };

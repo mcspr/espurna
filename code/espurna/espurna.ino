@@ -81,6 +81,9 @@ void setup() {
     // Init persistance
     settingsSetup();
 
+    // Init stack trace recorder
+    crashSetup();
+
     // Init Serial, SPIFFS and system check
     systemSetup();
 
