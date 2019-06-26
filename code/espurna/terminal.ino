@@ -80,14 +80,6 @@ void _terminalKeysCommand() {
 
 void _terminalInitCommand() {
 
-    #if DEBUG_CRASH_RECORDER
-        terminalRegisterCommand(F("CRASH"), [](Embedis* e) {
-            crashDump(terminalSerial());
-            crashClear();
-            terminalOK();
-        });
-    #endif
-
     terminalRegisterCommand(F("COMMANDS"), [](Embedis* e) {
         _terminalHelpCommand();
         terminalOK();
