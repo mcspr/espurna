@@ -14,6 +14,8 @@ Copyright (C) 2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <ESP8266WiFi.h>
 #endif
 
+#include "libs/AsyncClientPrinter.h"
+
 const char THINGSPEAK_REQUEST_TEMPLATE[] PROGMEM =
     "POST %s HTTP/1.1\r\n"
     "Host: %s\r\n"
@@ -25,35 +27,68 @@ const char THINGSPEAK_REQUEST_TEMPLATE[] PROGMEM =
 #if THINGSPEAK_USE_ASYNC
 
 AsyncClient * _tspk_client;
-String *_tspk_payload = nullptr;
 bool _tspk_connecting = false;
 bool _tspk_connected = false;
 
 #endif
 
+struct thingspeak_retry_t {
+
+    thingspeak_retry_t(uint8_t limit) :
+        _limit(limit),
+        _times(limit)
+    {}
+
+    operator bool() {
+        if (_times) return _times--;
+        return false;
+    }
+
+    void reset() {
+        _times = _limit;
+    }
+
+    uint8_t times() {
+        return _times;
+    }
+
+private:
+
+    const uint8_t _limit;
+    uint8_t _times;
+};
+
+
 class thingspeak_queue_t {
 
 private:
 
-    bool _do_clear;
+    std::bitset<THINGSPEAK_FIELDS> _used;
     std::vector<String> _fields;
     String _apiKey;
+    bool _do_clear;
 
 public:
 
     thingspeak_queue_t(const String&& apiKey, bool do_clear) :
-        _do_clear(do_clear),
         _fields(THINGSPEAK_FIELDS),
-        _apiKey(apiKey)
+        _apiKey(apiKey),
+        _do_clear(do_clear)
     {
+        // XXX: based on maximum sensor buffer size
         for (auto& field : _fields) {
-            field.reserve(16);
+            field.reserve(10);
         }
+    }
+
+    uint8_t fields() {
+        return _used.count();
     }
 
     bool place(unsigned char index, const char* data) {
         if (index >= _fields.size()) return false;
 
+        _used.set(index);
         _fields[index] = "";
         _fields[index].concat(data);
 
@@ -64,49 +99,72 @@ public:
         _do_clear = clear;
     }
 
+    // XXX: maybeClear() ?
     void clear() {
         if (!_do_clear) return;
-        for (auto& field : _fields) {
-            if (!field.length()) continue;
-            field = "";
+        for (unsigned char n=0; n < _fields.size(); ++n) {
+            if (!_fields[n].length()) continue;
+            _fields[n] = "";
+            _used.reset(n);
         }
     }
 
-    String generate_payload() {
+    bool empty() {
+        for (auto& field : _fields) {
+            if (field.length()) return false;
+        }
+        return true;
+    }
 
-        String result;
+    size_t estimate() {
+
         size_t size = 0;
 
-        for (auto& field : _fields) {
-            if (!field.length()) continue;
-            size += field.length();
-            size += strlen("field0=");
+        for (unsigned char id=0; id<_fields.size(); ++id) {
+            if (!_fields[id].length()) continue;
+            size += _fields[id].length();
+            size += strlen("field=&");
+            if (id < 10) {
+                size += 1;
+            } else if (id < 100) {
+                size += 2;
+            }
         }
 
-        if (!size) return result;
+        if (!size) return size;
 
         size += _apiKey.length();
-        result.reserve(size);
+        size += strlen("api_key=");
+
+        return size;
+
+    }
+
+    void sendPayload(Print& output) {
 
         unsigned char join = 0;
         for (unsigned char id=0; id<_fields.size(); ++id) {
             if (!_fields[id].length()) continue;
-            if (join) result += "&";
-            result += "field";
-            result.concat(id + 1);
-            result += "=";
-            result += _fields[id];
+            if (join) output.write("&");
+            char buf[24] = {0};
+            snprintf_P(buf, sizeof(buf), PSTR("field%u=%s"), (id + 1), _fields[id].c_str());
+            output.write(buf);
             ++join;
         }
 
-        result += "&api_key=";
-        result += _apiKey;
+        char buf[32] = {0};
+        snprintf_P(buf, sizeof(buf), PSTR("&api_key=%s"), _apiKey.c_str());
+        output.write(buf);
 
-        return result;
+    }
+
+    void sendPayload(const Print& output) {
+        sendPayload((Print&) output);
     }
 
 };
 
+thingspeak_retry_t _tspk_retry(THINGSPEAK_TRIES);
 thingspeak_queue_t* _tspk_queue = nullptr;
 bool _tspk_flush = false;
 bool _tspk_enabled = false;
@@ -173,8 +231,6 @@ void _tspkInitAsyncClient() {
     // Normal disconnection routine
     _tspk_client->onDisconnect([](void *s, AsyncClient *c) {
         DEBUG_MSG_P(PSTR("[THINGSPEAK] Disconnected\n"));
-        delete _tspk_payload;
-        _tspk_payload = nullptr;
         _tspk_connected = false;
         _tspk_connecting = false;
     }, nullptr);
@@ -194,10 +250,11 @@ void _tspkInitAsyncClient() {
         DEBUG_MSG_P(PSTR("[THINGSPEAK] Response value: %d\n"), code);
 
         _tspk_last_flush = millis();
-        if ((0 == code) && (--_tspk_tries > 0)) {
+        if (0 == code) {
             _tspk_flush = true;
-            DEBUG_MSG_P(PSTR("[THINGSPEAK] Re-enqueuing\n"));
+            DEBUG_MSG_P(PSTR("[THINGSPEAK] Re-enqueuing %u more time(s)\n"), _tspk_retry.times());
         } else {
+            _tspk_retry.reset();
             _tspk_queue->clear();
         }
 
@@ -212,7 +269,7 @@ void _tspkInitAsyncClient() {
 
         DEBUG_MSG_P(PSTR("[THINGSPEAK] Connected to %s:%d\n"), THINGSPEAK_HOST, THINGSPEAK_PORT);
 
-        if (!_tspk_payload) {
+        if (!_tspk_queue->estimate()) {
             DEBUG_MSG_P(PSTR("[THINGSPEAK] No payload, aborting\n"));
             c->close(true);
             return;
@@ -227,18 +284,24 @@ void _tspkInitAsyncClient() {
             }
         #endif
 
-        DEBUG_MSG_P(PSTR("[THINGSPEAK] POST %s?%s\n"), THINGSPEAK_URL, _tspk_payload->c_str());
+        DEBUG_MSG_P(PSTR("[THINGSPEAK] Sending %u field(s)\n"), _tspk_queue->fields());
         char headers[strlen_P(THINGSPEAK_REQUEST_TEMPLATE) + strlen(THINGSPEAK_URL) + strlen(THINGSPEAK_HOST)];
 
         snprintf_P(headers, sizeof(headers),
             THINGSPEAK_REQUEST_TEMPLATE,
             THINGSPEAK_URL,
             THINGSPEAK_HOST,
-            _tspk_payload->length()
+            _tspk_queue->estimate()
         );
 
+        Serial.println(headers);
+        _tspk_queue->sendPayload(Serial);
+        Serial.println();
+
         c->write(headers);
-        c->write(_tspk_payload->c_str());
+        _tspk_queue->sendPayload(AsyncClientPrinter(*c));
+
+        c->send();
 
     }, NULL);
 
@@ -270,13 +333,12 @@ void _tspkConfigure() {
 
 #if THINGSPEAK_USE_ASYNC
 
-void _tspkPost(const String& data) {
+void _tspkPost() {
 
     if (!_tspk_client) return;
     if (_tspk_connecting || _tspk_connected) return;
-    if (_tspk_payload) return;
+    if (!_tspk_queue->estimate()) return;
 
-    _tspk_payload = new String(std::move(data));
     _tspk_connecting = true;
 
     #if ASYNC_TCP_SSL_ENABLED
@@ -289,7 +351,7 @@ void _tspkPost(const String& data) {
 
 #else // THINGSPEAK_USE_ASYNC
 
-void _tspkPost(const String& data) {
+void _tspkPost() {
 
     #if THINGSPEAK_USE_SSL
         WiFiClientSecure _tspk_client;
@@ -305,16 +367,16 @@ void _tspkPost(const String& data) {
             DEBUG_MSG_P(PSTR("[THINGSPEAK] Warning: certificate doesn't match\n"));
         }
 
-        DEBUG_MSG_P(PSTR("[THINGSPEAK] POST %s?%s\n"), THINGSPEAK_URL, data.c_str());
-        char buffer[strlen_P(THINGSPEAK_REQUEST_TEMPLATE) + strlen(THINGSPEAK_URL) + strlen(THINGSPEAK_HOST) + data.length()];
+        DEBUG_MSG_P(PSTR("[THINGSPEAK] Sending %u field(s)\n"), _tspk_queue->fields());
+        char buffer[strlen_P(THINGSPEAK_REQUEST_TEMPLATE) + strlen(THINGSPEAK_URL) + strlen(THINGSPEAK_HOST) + 1];
         snprintf_P(buffer, sizeof(buffer),
             THINGSPEAK_REQUEST_TEMPLATE,
             THINGSPEAK_URL,
             THINGSPEAK_HOST,
-            data.length(),
-            data.c_str()
+            _tspk_queue->estimate()
         );
         _tspk_client.print(buffer);
+        _tspk_queue->sendPayload(_tspk_client);
 
         nice_delay(100);
 
@@ -325,10 +387,11 @@ void _tspkPost(const String& data) {
         _tspk_client.stop();
 
         _tspk_last_flush = millis();
-        if ((0 == code) && (--_tspk_tries > 0)) {
+        if (0 == code) {
             _tspk_flush = true;
-            DEBUG_MSG_P(PSTR("[THINGSPEAK] Re-enqueuing\n"));
+            DEBUG_MSG_P(PSTR("[THINGSPEAK] Re-enqueuing %u more time(s)\n"), _tspk_retry.times());
         } else {
+            _tspk_retry.reset();
             _tspk_queue->clear();
         }
 
@@ -355,11 +418,13 @@ void _tspkFlush() {
 
     _tspk_flush = false;
 
-    String payload = _tspk_queue->generate_payload();
-    if (!payload.length()) return;
-
-    _tspk_tries = THINGSPEAK_TRIES;
-    _tspkPost(payload);
+    if (_tspk_queue->empty()) return;
+    if (_tspk_retry) {
+        _tspkPost();
+    } else {
+        _tspk_queue->clear();
+        _tspk_retry.reset();
+    }
 
 }
 
