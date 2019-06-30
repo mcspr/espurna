@@ -31,19 +31,18 @@ bool _tspk_connected = false;
 
 #endif
 
-bool _tspk_enabled = false;
-bool _tspk_clear = false;
-
 class thingspeak_queue_t {
 
 private:
 
+    bool _do_clear;
     std::vector<String> _fields;
     String _apiKey;
 
 public:
 
-    thingspeak_queue_t(const String&& apiKey) :
+    thingspeak_queue_t(const String&& apiKey, bool do_clear) :
+        _do_clear(do_clear),
         _fields(THINGSPEAK_FIELDS),
         _apiKey(apiKey)
     {
@@ -61,7 +60,12 @@ public:
         return true;
     }
 
+    void setClear(bool clear) {
+        _do_clear = clear;
+    }
+
     void clear() {
+        if (!_do_clear) return;
         for (auto& field : _fields) {
             if (!field.length()) continue;
             field = "";
@@ -95,13 +99,17 @@ public:
             ++join;
         }
 
+        result += "&api_key=";
+        result += _apiKey;
+
         return result;
     }
-    
+
 };
 
 thingspeak_queue_t* _tspk_queue = nullptr;
 bool _tspk_flush = false;
+bool _tspk_enabled = false;
 unsigned long _tspk_last_flush = 0;
 unsigned char _tspk_tries = 0;
 
@@ -239,7 +247,6 @@ void _tspkInitAsyncClient() {
 #endif // THINGSPEAK_USE_ASYNC
 
 void _tspkConfigure() {
-    _tspk_clear = getSetting("tspkClear", THINGSPEAK_CLEAR_CACHE).toInt() == 1;
     _tspk_enabled = getSetting("tspkEnabled", THINGSPEAK_ENABLED).toInt() == 1;
     String apiKey = getSetting("tspkKey");
     if (_tspk_enabled && !apiKey.length()) {
@@ -248,7 +255,12 @@ void _tspkConfigure() {
     }
 
     if (_tspk_enabled) {
-        if (!_tspk_queue) _tspk_queue = new thingspeak_queue_t(std::move(apiKey));
+        bool clear = getSetting("tspkClear", THINGSPEAK_CLEAR_CACHE).toInt() == 1;
+        if (!_tspk_queue) {
+            _tspk_queue = new thingspeak_queue_t(std::move(apiKey), clear);
+        } else {
+            _tspk_queue->setClear(clear);
+        }
         #if THINGSPEAK_USE_ASYNC
             if (!_tspk_client) _tspkInitAsyncClient();
         #endif
