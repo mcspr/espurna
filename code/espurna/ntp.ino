@@ -26,7 +26,7 @@ bool _ntp_want_sync = false;
 
 #if WEB_SUPPORT
 
-bool _ntpWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _ntpWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "ntp", 3) == 0);
 }
 
@@ -256,7 +256,7 @@ void ntpSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_ntpWebSocketOnSend);
-        wsOnReceiveRegister(_ntpWebSocketOnReceive);
+        wsKeyCheckRegister(_ntpWebSocketKeyCheck);
     #endif
 
     // Main callbacks

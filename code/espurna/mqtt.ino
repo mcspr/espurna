@@ -56,11 +56,12 @@ String _mqtt_clientid;
 
 std::vector<mqtt_callback_f> _mqtt_callbacks;
 
-typedef struct {
-    unsigned char parent = 255;
+struct mqtt_message_t {
+    static const unsigned char END = 255;
+    unsigned char parent = END;
     char * topic;
     char * message = NULL;
-} mqtt_message_t;
+};
 std::vector<mqtt_message_t> _mqtt_queue;
 Ticker _mqtt_flush_ticker;
 
@@ -341,7 +342,7 @@ void _mqttInfo() {
 
 #if WEB_SUPPORT
 
-bool _mqttWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _mqttWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "mqtt", 3) == 0);
 }
 
@@ -603,7 +604,7 @@ void mqttSend(const char * topic, unsigned int index, const char * message) {
 
 // -----------------------------------------------------------------------------
 
-unsigned char _mqttBuildTree(JsonObject& root, char parent) {
+unsigned char _mqttBuildTree(JsonObject& root, unsigned char parent) {
 
     unsigned char count = 0;
 
@@ -612,18 +613,18 @@ unsigned char _mqttBuildTree(JsonObject& root, char parent) {
         mqtt_message_t element = _mqtt_queue[i];
         if (element.parent == parent) {
             ++count;
-            JsonObject& elements = root.createNestedObject(element.topic);
+            JsonObject elements = root.createNestedObject(element.topic);
             unsigned char num = _mqttBuildTree(elements, i);
             if (0 == num) {
                 if (isNumber(element.message)) {
                     double value = atof(element.message);
                     if (value == int(value)) {
-                        root.set(element.topic, int(value));
+                        root[element.topic] = lround(value);
                     } else {
-                        root.set(element.topic, value);
+                        root[element.topic] = value;
                     }
                 } else {
-                    root.set(element.topic, element.message);
+                    root[element.topic] = element.message;
                 }
             }
         }
@@ -633,15 +634,19 @@ unsigned char _mqttBuildTree(JsonObject& root, char parent) {
 
 }
 
+unsigned char _mqttBuildTree(JsonObject& root) {
+    return _mqttBuildTree(root, mqtt_message_t::END);
+}
+
 void mqttFlush() {
 
     if (!_mqtt.connected()) return;
     if (_mqtt_queue.size() == 0) return;
 
     // Build tree recursively
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
-    _mqttBuildTree(root, 255);
+    DynamicJsonDocument doc(1024);
+    JsonObject root = doc.as<JsonObject>();
+    _mqttBuildTree(root);
 
     // Add extra propeties
     #if NTP_SUPPORT && MQTT_ENQUEUE_DATETIME
@@ -662,8 +667,8 @@ void mqttFlush() {
 
     // Send
     String output;
-    root.printTo(output);
-    jsonBuffer.clear();
+    output.reserve(1280);
+    serializeJson(root, output);
 
     mqttSendRaw(_mqtt_topic_json.c_str(), output.c_str(), false);
 
@@ -704,7 +709,7 @@ int8_t mqttEnqueue(const char * topic, const char * message, unsigned char paren
 }
 
 int8_t mqttEnqueue(const char * topic, const char * message) {
-    return mqttEnqueue(topic, message, 255);
+    return mqttEnqueue(topic, message, mqtt_message_t::END);
 }
 
 // -----------------------------------------------------------------------------
@@ -844,7 +849,7 @@ void mqttSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_mqttWebSocketOnSend);
-        wsOnReceiveRegister(_mqttWebSocketOnReceive);
+        wsKeyCheckRegister(_mqttWebSocketKeyCheck);
     #endif
 
     #if TERMINAL_SUPPORT

@@ -20,7 +20,7 @@ Ticker _web_defer;
 
 std::vector<ws_on_send_callback_f> _ws_on_send_callbacks;
 std::vector<ws_on_action_callback_f> _ws_on_action_callbacks;
-std::vector<ws_on_receive_callback_f> _ws_on_receive_callbacks;
+std::vector<ws_key_check_callback_f> _ws_key_check_callbacks;
 
 // -----------------------------------------------------------------------------
 // Private methods
@@ -79,16 +79,17 @@ bool wsDebugSend(const char* prefix, const char* message) {
     if (!wsConnected()) return false;
     if (getFreeHeap() < (strlen(message) * 3)) return false;
 
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject &root = jsonBuffer.createObject();
-    JsonObject &weblog = root.createNestedObject("weblog");
+    constexpr size_t WS_SEND_DEBUG_JSON_BUFFER_MAX = 256;
 
-    weblog.set("message", message);
+    DynamicJsonDocument doc(WS_SEND_DEBUG_JSON_BUFFER_MAX);
+    JsonObject weblog = doc.createNestedObject("weblog");
+
+    weblog["message"] = message;
     if (prefix && (prefix[0] != '\0')) {
-        weblog.set("prefix", prefix);
+        weblog["prefix"] = prefix;
     }
 
-    wsSend(root);
+    wsSend(weblog);
 
     return true;
 }
@@ -103,7 +104,7 @@ void _wsMQTTCallback(unsigned int type, const char * topic, const char * payload
 }
 #endif
 
-bool _wsStore(String key, String value) {
+bool _wsStore(const String& key, const String& value) {
 
     // HTTP port
     if (key == "webPort") {
@@ -120,13 +121,13 @@ bool _wsStore(String key, String value) {
 
 }
 
-bool _wsStore(String key, JsonArray& value) {
+bool _wsStore(const String& key, JsonArray values) {
 
     bool changed = false;
 
     unsigned char index = 0;
-    for (auto element : value) {
-        if (_wsStore(key + index, element.as<String>())) changed = true;
+    for (auto value : values) {
+        if (_wsStore(key + index, value.as<String>())) changed = true;
         index++;
     }
 
@@ -147,16 +148,20 @@ void _wsParse(AsyncWebSocketClient *client, uint8_t * payload, size_t length) {
     // Get client ID
     uint32_t client_id = client->id();
 
-    // Parse JSON input
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject((char *) payload);
-    if (!root.success()) {
-        DEBUG_MSG_P(PSTR("[WEBSOCKET] Error parsing data\n"));
+    // We don't expect too much of a problem with low buffer size,
+    // because 'payload' can be modified in-place to reference every kv pair
+    DynamicJsonDocument doc(1024);
+    DeserializationError error = deserializeJson(doc, payload);
+
+    if (error) {
+        DEBUG_MSG_P(PSTR("[WEBSOCKET] JSON parsing error: %s\n"), error.c_str());
         wsSend_P(client_id, PSTR("{\"message\": 3}"));
         return;
     }
 
     // Check actions -----------------------------------------------------------
+
+    JsonObject root = doc.as<JsonObject>();
 
     const char* action = root["action"];
     if (action) {
@@ -180,8 +185,8 @@ void _wsParse(AsyncWebSocketClient *client, uint8_t * payload, size_t length) {
             return;
         }
 
-        JsonObject& data = root["data"];
-        if (data.success()) {
+        JsonObject data = root["data"];
+        if (!data.isNull()) {
 
             // Callbacks
             for (unsigned char i = 0; i < _ws_on_action_callbacks.size(); i++) {
@@ -205,8 +210,8 @@ void _wsParse(AsyncWebSocketClient *client, uint8_t * payload, size_t length) {
 
     // Check configuration -----------------------------------------------------
 
-    JsonObject& config = root["config"];
-    if (config.success()) {
+    JsonObject config = root["config"];
+    if (!config.isNull()) {
 
         DEBUG_MSG_P(PSTR("[WEBSOCKET] Parsing configuration data\n"));
 
@@ -216,13 +221,23 @@ void _wsParse(AsyncWebSocketClient *client, uint8_t * payload, size_t length) {
         for (auto kv: config) {
 
             bool changed = false;
-            String key = kv.key;
-            JsonVariant& value = kv.value;
+
+            // Check if key has to be processed
+            const String key(kv.key().c_str());
+            bool found = false;
+            for (auto& check : _ws_key_check_callbacks) {
+                found |= check(key.c_str());
+                // TODO: remove this to call all KeyCheckCallbacks with the
+                // current key/value
+                if (found) break;
+            }
+
+            JsonVariant value = kv.value();
 
             // Check password
             if (key == "adminPass") {
-                if (!value.is<JsonArray&>()) continue;
-                JsonArray& values = value.as<JsonArray&>();
+                if (!value.is<JsonArray>()) continue;
+                auto values = value.as<JsonArray>();
                 if (values.size() != 2) continue;
                 if (values[0].as<String>().equals(values[1].as<String>())) {
                     String password = values[0].as<String>();
@@ -237,22 +252,14 @@ void _wsParse(AsyncWebSocketClient *client, uint8_t * payload, size_t length) {
                 continue;
             }
 
-            // Check if key has to be processed
-            bool found = false;
-            for (unsigned char i = 0; i < _ws_on_receive_callbacks.size(); i++) {
-                found |= (_ws_on_receive_callbacks[i])(key.c_str(), value);
-                // TODO: remove this to call all OnReceiveCallbacks with the
-                // current key/value
-                if (found) break;
-            }
             if (!found) {
                 delSetting(key);
                 continue;
             }
 
             // Store values
-            if (value.is<JsonArray&>()) {
-                if (_wsStore(key, value.as<JsonArray&>())) changed = true;
+            if (value.is<JsonArray>()) {
+                if (_wsStore(key, value.as<JsonArray>())) changed = true;
             } else {
                 if (_wsStore(key, value.as<String>())) changed = true;
             }
@@ -312,7 +319,7 @@ void _wsDoUpdate(bool reset = false) {
 }
 
 
-bool _wsOnReceive(const char * key, JsonVariant& value) {
+bool _wsKeyCheck(const char * key) {
     if (strncmp(key, "ws", 2) == 0) return true;
     if (strncmp(key, "admin", 5) == 0) return true;
     if (strncmp(key, "hostname", 8) == 0) return true;
@@ -367,12 +374,11 @@ void _wsOnStart(JsonObject& root) {
 
 }
 
-void wsSend(JsonObject& root) {
-    size_t len = root.measureLength();
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+void wsSend(JsonObject& root){
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(root.size() + 1);
 
     if (buffer) {
-        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        serializeJson(root, reinterpret_cast<char*>(buffer->get()), buffer->length());
         _ws.textAll(buffer);
     }
 }
@@ -381,12 +387,11 @@ void wsSend(uint32_t client_id, JsonObject& root) {
     AsyncWebSocketClient* client = _ws.client(client_id);
     if (client == nullptr) return;
 
-    size_t len = root.measureLength();
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(root.size() + 1);
 
     if (buffer) {
-        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
-        client->text(buffer);
+        serializeJson(root, reinterpret_cast<char*>(buffer->get()), buffer->length());
+        _ws.textAll(buffer);
     }
 }
 
@@ -397,12 +402,14 @@ void _wsStart(uint32_t client_id) {
         bool changePassword = false;
     #endif
 
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+    constexpr const size_t WS_START_JSON_BUFFER_MAX = 1024;
+
+    DynamicJsonDocument doc(WS_START_JSON_BUFFER_MAX);
+    JsonObject root = doc.as<JsonObject>();
 
     if (changePassword) {
         root["webMode"] = WEB_MODE_PASSWORD;
-        wsSend(root);
+        wsSend(client_id, root);
         return;
     }
 
@@ -431,7 +438,7 @@ void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTy
         IPAddress ip = client->remoteIP();
         DEBUG_MSG_P(PSTR("[WEBSOCKET] #%u connected, ip: %d.%d.%d.%d, url: %s\n"), client->id(), ip[0], ip[1], ip[2], ip[3], server->url());
         _wsStart(client->id());
-        client->_tempObject = new WebSocketIncommingBuffer(&_wsParse, true);
+        client->_tempObject = new WebSocketIncommingBuffer(_wsParse, true);
         wifiReconnectCheck();
 
     } else if(type == WS_EVT_DISCONNECT) {
@@ -478,8 +485,8 @@ void wsOnSendRegister(ws_on_send_callback_f callback) {
     _ws_on_send_callbacks.push_back(callback);
 }
 
-void wsOnReceiveRegister(ws_on_receive_callback_f callback) {
-    _ws_on_receive_callbacks.push_back(callback);
+void wsKeyCheckRegister(ws_key_check_callback_f callback) {
+    _ws_key_check_callbacks.push_back(callback);
 }
 
 void wsOnActionRegister(ws_on_action_callback_f callback) {
@@ -487,13 +494,16 @@ void wsOnActionRegister(ws_on_action_callback_f callback) {
 }
 
 void wsSend(ws_on_send_callback_f callback) {
-    if (_ws.count() > 0) {
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& root = jsonBuffer.createObject();
-        callback(root);
 
+    constexpr const size_t WS_SEND_JSON_BUFFER_MAX = 1024;
+
+    if (_ws.count() > 0) {
+        DynamicJsonDocument doc(WS_SEND_JSON_BUFFER_MAX);
+        JsonObject root = doc.as<JsonObject>();
+        callback(root);
         wsSend(root);
     }
+
 }
 
 void wsSend(const char * payload) {
@@ -514,15 +524,16 @@ void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
     AsyncWebSocketClient* client = _ws.client(client_id);
     if (client == nullptr) return;
 
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+    constexpr const size_t WS_SEND_CB_JSON_BUFFER_MAX = 1024;
+
+    DynamicJsonDocument doc(WS_SEND_CB_JSON_BUFFER_MAX);
+    JsonObject root = doc.as<JsonObject>();
     callback(root);
 
-    size_t len = root.measureLength();
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(doc.size() + 1);
 
     if (buffer) {
-        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        serializeJson(doc, reinterpret_cast<char*>(buffer->get()), buffer->length());
         client->text(buffer);
     }
 }
@@ -556,7 +567,7 @@ void wsSetup() {
     #endif
 
     wsOnSendRegister(_wsOnStart);
-    wsOnReceiveRegister(_wsOnReceive);
+    wsKeyCheckRegister(_wsKeyCheck);
     espurnaRegisterLoop(_wsLoop);
 }
 

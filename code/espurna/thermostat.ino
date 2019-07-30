@@ -14,6 +14,8 @@ Copyright (C) 2017 by Dmitry Blinov <dblinov76 at gmail dot com>
 bool _thermostat_enabled = true;
 bool _thermostat_mode_cooler = false;
 
+constexpr const size_t THERMOSTAT_JSON_BUFFER_MAX = 1024;
+
 const char* NAME_THERMOSTAT_ENABLED     = "thermostatEnabled";
 const char* NAME_THERMOSTAT_MODE        = "thermostatMode";
 const char* NAME_TEMP_RANGE_MIN         = "tempRangeMin";
@@ -157,7 +159,7 @@ void updateRemoteTemp(bool remote_temp_actual) {
 //------------------------------------------------------------------------------
 // MQTT
 //------------------------------------------------------------------------------
-void thermostatMQTTCallback(unsigned int type, const char * topic, const char * payload) {
+void thermostatMQTTCallback(unsigned int type, const char * topic, char * payload) {
 
     if (type == MQTT_CONNECT_EVENT) {
       mqttSubscribeRaw(thermostat_remote_sensor_topic.c_str());
@@ -176,10 +178,10 @@ void thermostatMQTTCallback(unsigned int type, const char * topic, const char * 
            return;
 
         // Parse JSON input
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& root = jsonBuffer.parseObject(payload);
-        if (!root.success()) {
-            DEBUG_MSG_P(PSTR("[THERMOSTAT] Error parsing data\n"));
+        DynamicJsonDocument doc(THERMOSTAT_JSON_BUFFER_MAX);
+        DeserializationError error = deserializeJson(doc, payload);
+        if (error) {
+            DEBUG_MSG_P(PSTR("[THERMOSTAT] JSON parsing error: %s\n"), error.c_str());
             return;
         }
 
@@ -328,7 +330,7 @@ void _thermostatWebSocketOnSend(JsonObject& root) {
 }
 
 //------------------------------------------------------------------------------
-bool _thermostatWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _thermostatWebSocketKeyCheck(const char * key) {
     if (strncmp(key, NAME_THERMOSTAT_ENABLED,   strlen(NAME_THERMOSTAT_ENABLED))   == 0) return true;
     if (strncmp(key, NAME_THERMOSTAT_MODE,      strlen(NAME_THERMOSTAT_MODE))      == 0) return true;
     if (strncmp(key, NAME_TEMP_RANGE_MIN,       strlen(NAME_TEMP_RANGE_MIN))       == 0) return true;
@@ -359,7 +361,7 @@ void thermostatSetup() {
   // Websockets
   #if WEB_SUPPORT
       wsOnSendRegister(_thermostatWebSocketOnSend);
-      wsOnReceiveRegister(_thermostatWebSocketOnReceive);
+      wsKeyCheckRegister(_thermostatWebSocketKeyCheck);
       wsOnActionRegister(_thermostatWebSocketOnAction);
   #endif
 

@@ -31,7 +31,7 @@ bool _telnetClientsAuth[TELNET_MAX_CLIENTS];
 
 #if WEB_SUPPORT
 
-bool _telnetWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _telnetWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "telnet", 6) == 0);
 }
 
@@ -314,7 +314,7 @@ void telnetSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_telnetWebSocketOnSend);
-        wsOnReceiveRegister(_telnetWebSocketOnReceive);
+        wsKeyCheckRegister(_telnetWebSocketKeyCheck);
     #endif
 
     espurnaRegisterReload(_telnetConfigure);

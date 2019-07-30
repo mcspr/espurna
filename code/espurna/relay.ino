@@ -594,12 +594,12 @@ void _relayConfigure() {
 
 #if WEB_SUPPORT
 
-bool _relayWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _relayWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "relay", 5) == 0);
 }
 
 void _relayWebSocketUpdate(JsonObject& root) {
-    JsonArray& relay = root.createNestedArray("relayStatus");
+    JsonArray relay = root.createNestedArray("relayStatus");
     for (unsigned char i=0; i<relayCount(); i++) {
         relay.add<uint8_t>(_relays[i].target_status);
     }
@@ -635,24 +635,25 @@ String _relayFriendlyName(unsigned char i) {
 }
 
 void _relayWebSocketSendRelays() {
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
-    JsonObject& relays = root.createNestedObject("relayConfig");
+    DynamicJsonDocument doc(1024);
+
+    JsonObject root = doc.as<JsonObject>();
+    JsonObject relays = root.createNestedObject("relayConfig");
 
     relays["size"] = relayCount();
     relays["start"] = 0;
 
-    JsonArray& gpio = relays.createNestedArray("gpio");
-    JsonArray& type = relays.createNestedArray("type");
-    JsonArray& reset = relays.createNestedArray("reset");
-    JsonArray& boot = relays.createNestedArray("boot");
-    JsonArray& pulse = relays.createNestedArray("pulse");
-    JsonArray& pulse_time = relays.createNestedArray("pulse_time");
+    JsonArray gpio = relays.createNestedArray("gpio");
+    JsonArray type = relays.createNestedArray("type");
+    JsonArray reset = relays.createNestedArray("reset");
+    JsonArray boot = relays.createNestedArray("boot");
+    JsonArray pulse = relays.createNestedArray("pulse");
+    JsonArray pulse_time = relays.createNestedArray("pulse_time");
 
     #if MQTT_SUPPORT
-        JsonArray& group = relays.createNestedArray("group");
-        JsonArray& group_sync = relays.createNestedArray("group_sync");
-        JsonArray& on_disconnect = relays.createNestedArray("on_disc");
+        JsonArray group = relays.createNestedArray("group");
+        JsonArray group_sync = relays.createNestedArray("group_sync");
+        JsonArray on_disconnect = relays.createNestedArray("on_disc");
     #endif
 
     for (unsigned char i=0; i<relayCount(); i++) {
@@ -733,7 +734,7 @@ void _relayWebSocketOnAction(uint32_t client_id, const char * action, JsonObject
 void relaySetupWS() {
     wsOnSendRegister(_relayWebSocketOnStart);
     wsOnActionRegister(_relayWebSocketOnAction);
-    wsOnReceiveRegister(_relayWebSocketOnReceive);
+    wsKeyCheckRegister(_relayWebSocketKeyCheck);
 }
 
 #endif // WEB_SUPPORT

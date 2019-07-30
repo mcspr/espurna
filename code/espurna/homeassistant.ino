@@ -12,7 +12,6 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <queue>
 
 bool _haEnabled = false;
-bool _haSendFlag = false;
 
 // -----------------------------------------------------------------------------
 // UTILS
@@ -35,7 +34,7 @@ void _haSendMagnitude(unsigned char i, JsonObject& config) {
 
     unsigned char type = magnitudeType(i);
     config["name"] = _haFixName(getSetting("hostname") + String(" ") + magnitudeTopic(type));
-    config.set("platform", "mqtt");
+    config["platform"] = "mqtt";
     config["state_topic"] = mqttTopic(magnitudeTopicIndex(i).c_str(), false);
     config["unit_of_measurement"] = magnitudeUnits(type);
 }
@@ -51,14 +50,13 @@ void _haSendMagnitudes(const JsonObject& deviceConfig) {
 
         String output;
         if (_haEnabled) {
-            DynamicJsonBuffer jsonBuffer;
-            JsonObject& config = jsonBuffer.createObject();
+            output.reserve(512);
+            DynamicJsonDocument config(768);
             _haSendMagnitude(i, config);
             config["uniq_id"] = getIdentifier() + "_" + magnitudeTopic(magnitudeType(i)) + "_" + String(i);
             config["device"] = deviceConfig;
             
             config.printTo(output);
-            jsonBuffer.clear();
         }
 
         mqttSendRaw(topic.c_str(), output.c_str());
@@ -81,8 +79,8 @@ void _haSendSwitch(unsigned char i, JsonObject& config) {
         name += String("_") + String(i);
     }
 
-    config.set("name", _haFixName(name));
-    config.set("platform", "mqtt");
+    config["name"] = _haFixName(name);
+    config["platform"] = "mqtt";
 
     if (relayCount()) {
         config["state_topic"] = mqttTopic(MQTT_TOPIC_RELAY, i, false);
@@ -137,14 +135,14 @@ void _haSendSwitches(const JsonObject& deviceConfig) {
 
         String output;
         if (_haEnabled) {
-            DynamicJsonBuffer jsonBuffer;
-            JsonObject& config = jsonBuffer.createObject();
+            output.reserve(512);
+            DynamicJsonDocument doc(768);
+            JsonObject config = doc.as<JsonObject>();
             _haSendSwitch(i, config);
             config["uniq_id"] = getIdentifier() + "_" + type + "_" + String(i);
             config["device"] = deviceConfig;
 
-            config.printTo(output);
-            jsonBuffer.clear();
+            serializeJson(config, output);
         }
 
         mqttSendRaw(topic.c_str(), output.c_str());
@@ -166,12 +164,12 @@ void _haDumpConfig(std::function<void(String&)> printer, bool wrapJson = false) 
 
     for (unsigned char i=0; i<relayCount(); i++) {
 
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& config = jsonBuffer.createObject();
+        DynamicJsonDocument doc(1024);
+        JsonObject config = doc.as<JsonObject>();
         _haSendSwitch(i, config);
 
         String output;
-        output.reserve(config.measureLength() + 32);
+        output.reserve(config.size() + 32);
 
         if (wrapJson) {
             output += "{\"haConfig\": \"";
@@ -187,18 +185,16 @@ void _haDumpConfig(std::function<void(String&)> printer, bool wrapJson = false) 
             } else {
                 output += "    ";
             }
-            output += kv.key;
+            output += kv.key().c_str();
             output += ": ";
-            output += kv.value.as<String>();
-            output += "\n";
+            output += kv.value().as<char*>();
+            output += '\n';
         }
         output += " ";
 
         if (wrapJson) {
             output += "\"}";
         }
-
-        jsonBuffer.clear();
 
         printer(output);
 
@@ -208,12 +204,11 @@ void _haDumpConfig(std::function<void(String&)> printer, bool wrapJson = false) 
 
         for (unsigned char i=0; i<magnitudeCount(); i++) {
 
-            DynamicJsonBuffer jsonBuffer;
-            JsonObject& config = jsonBuffer.createObject();
+            DynamicJsonDocument config(512);
             _haSendMagnitude(i, config);
 
             String output;
-            output.reserve(config.measureLength() + 32);
+            output.reserve(config.size() + 32);
 
             if (wrapJson) {
                 output += "{\"haConfig\": \"";
@@ -242,8 +237,6 @@ void _haDumpConfig(std::function<void(String&)> printer, bool wrapJson = false) 
                 output += "\"}";
             }
 
-            jsonBuffer.clear();
-
             printer(output);
 
         }
@@ -263,33 +256,26 @@ void _haGetDeviceConfig(JsonObject& config) {
 
 void _haSend() {
 
-    // Pending message to send?
-    if (!_haSendFlag) return;
-
     // Are we connected?
     if (!mqttConnected()) return;
 
     DEBUG_MSG_P(PSTR("[HA] Sending autodiscovery MQTT message\n"));
 
     // Get common device config
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& deviceConfig = jsonBuffer.createObject();
-    _haGetDeviceConfig(deviceConfig);
+    DynamicJsonDocument doc(1024);
+    JsonObject config = doc.as<JsonObject>();
+    _haGetDeviceConfig(config);
 
     // Send messages
-    _haSendSwitches(deviceConfig);
+    _haSendSwitches(config);
     #if SENSOR_SUPPORT
-        _haSendMagnitudes(deviceConfig);
+        _haSendMagnitudes(config);
     #endif
-    
-    jsonBuffer.clear();
-    _haSendFlag = false;
 
 }
 
 void _haConfigure() {
     bool enabled = getSetting("haEnabled", HOMEASSISTANT_ENABLED).toInt() == 1;
-    _haSendFlag = (enabled != _haEnabled);
     _haEnabled = enabled;
     _haSend();
 }
@@ -298,7 +284,7 @@ void _haConfigure() {
 
 std::queue<uint32_t> _ha_send_config;
 
-bool _haWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _haWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "ha", 2) == 0);
 }
 
@@ -376,7 +362,7 @@ void haSetup() {
     #if WEB_SUPPORT
         wsOnSendRegister(_haWebSocketOnSend);
         wsOnActionRegister(_haWebSocketOnAction);
-        wsOnReceiveRegister(_haWebSocketOnReceive);
+        wsKeyCheckRegister(_haWebSocketKeyCheck);
         espurnaRegisterLoop(_haLoop);
     #endif
 
@@ -386,7 +372,7 @@ void haSetup() {
 
     // On MQTT connect check if we have something to send
     mqttRegister([](unsigned int type, const char * topic, const char * payload) {
-        if (type == MQTT_CONNECT_EVENT) _haSend();
+        if ((type == MQTT_CONNECT_EVENT) && _haEnabled) _haSend();
     });
 
     // Main callbacks

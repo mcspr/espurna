@@ -15,7 +15,7 @@ Adapted by Xose Pérez <xose dot perez at gmail dot com>
 
 #if WEB_SUPPORT
 
-bool _schWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _schWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "sch", 3) == 0);
 }
 
@@ -26,17 +26,17 @@ void _schWebSocketOnSend(JsonObject &root){
     root["schVisible"] = 1;
     root["maxSchedules"] = SCHEDULER_MAX_SCHEDULES;
 
-    JsonObject &schedules = root.createNestedObject("schedules");
+    JsonObject schedules = root.createNestedObject("schedules");
     uint8_t size = 0;
 
-    JsonArray& enabled = schedules.createNestedArray("schEnabled");
-    JsonArray& switch_ = schedules.createNestedArray("schSwitch");
-    JsonArray& action = schedules.createNestedArray("schAction");
-    JsonArray& type = schedules.createNestedArray("schType");
-    JsonArray& hour = schedules.createNestedArray("schHour");
-    JsonArray& minute = schedules.createNestedArray("schMinute");
-    JsonArray& utc = schedules.createNestedArray("schUTC");
-    JsonArray& weekdays = schedules.createNestedArray("schWDs");
+    JsonArray enabled = schedules.createNestedArray("schEnabled");
+    JsonArray switch_ = schedules.createNestedArray("schSwitch");
+    JsonArray action = schedules.createNestedArray("schAction");
+    JsonArray type = schedules.createNestedArray("schType");
+    JsonArray hour = schedules.createNestedArray("schHour");
+    JsonArray minute = schedules.createNestedArray("schMinute");
+    JsonArray utc = schedules.createNestedArray("schUTC");
+    JsonArray weekdays = schedules.createNestedArray("schWDs");
 
     for (byte i = 0; i < SCHEDULER_MAX_SCHEDULES; i++) {
         if (!hasSetting("schSwitch", i)) break;
@@ -230,7 +230,7 @@ void schSetup() {
     // Update websocket clients
     #if WEB_SUPPORT
         wsOnSendRegister(_schWebSocketOnSend);
-        wsOnReceiveRegister(_schWebSocketOnReceive);
+        wsKeyCheckRegister(_schWebSocketKeyCheck);
     #endif
 
     // Main callbacks

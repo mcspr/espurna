@@ -120,13 +120,13 @@ template<typename T> void _sensorWebSocketMagnitudes(JsonObject& root, T prefix)
     // config uses <prefix>Magnitude<index> (cut 's')
     String conf_name = ws_name.substring(0, ws_name.length() - 1);
 
-    JsonObject& list = root.createNestedObject(ws_name);
+    JsonObject list = root.createNestedObject(ws_name);
     list["size"] = magnitudeCount();
 
-    JsonArray& name = list.createNestedArray("name");
-    JsonArray& type = list.createNestedArray("type");
-    JsonArray& index = list.createNestedArray("index");
-    JsonArray& idx = list.createNestedArray("idx");
+    JsonArray name = list.createNestedArray("name");
+    JsonArray type = list.createNestedArray("type");
+    JsonArray index = list.createNestedArray("index");
+    JsonArray idx = list.createNestedArray("idx");
 
     for (unsigned char i=0; i<magnitudeCount(); ++i) {
         name.add(magnitudeName(i));
@@ -136,7 +136,7 @@ template<typename T> void _sensorWebSocketMagnitudes(JsonObject& root, T prefix)
     }
 }
 
-bool _sensorWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _sensorWebSocketKeyCheck(const char * key) {
     if (strncmp(key, "pwr", 3) == 0) return true;
     if (strncmp(key, "sns", 3) == 0) return true;
     if (strncmp(key, "tmp", 3) == 0) return true;
@@ -153,15 +153,15 @@ void _sensorWebSocketSendData(JsonObject& root) {
     bool hasHumidity = false;
     bool hasMICS = false;
 
-    JsonObject& magnitudes = root.createNestedObject("magnitudes");
+    JsonObject magnitudes = root.createNestedObject("magnitudes");
     uint8_t size = 0;
 
-    JsonArray& index = magnitudes.createNestedArray("index");
-    JsonArray& type = magnitudes.createNestedArray("type");
-    JsonArray& value = magnitudes.createNestedArray("value");
-    JsonArray& units = magnitudes.createNestedArray("units");
-    JsonArray& error = magnitudes.createNestedArray("error");
-    JsonArray& description = magnitudes.createNestedArray("description");
+    JsonArray index = magnitudes.createNestedArray("index");
+    JsonArray type = magnitudes.createNestedArray("type");
+    JsonArray value = magnitudes.createNestedArray("value");
+    JsonArray units = magnitudes.createNestedArray("units");
+    JsonArray error = magnitudes.createNestedArray("error");
+    JsonArray description = magnitudes.createNestedArray("description");
 
     for (unsigned char i=0; i<magnitudeCount(); i++) {
 
@@ -271,13 +271,13 @@ void _sensorWebSocketStart(JsonObject& root) {
 
     /*
     // Sensors manifest
-    JsonArray& manifest = root.createNestedArray("manifest");
+    JsonArray manifest = root.createNestedArray("manifest");
     #if BMX280_SUPPORT
         BMX280Sensor::manifest(manifest);
     #endif
 
     // Sensors configuration
-    JsonArray& sensors = root.createNestedArray("sensors");
+    JsonArray sensors = root.createNestedArray("sensors");
     for (unsigned char i; i<_sensors.size(); i++) {
         JsonObject& sensor = sensors.createNestedObject();
         sensor["index"] = i;
@@ -1438,7 +1438,7 @@ void sensorSetup() {
     // Websockets
     #if WEB_SUPPORT
         wsOnSendRegister(_sensorWebSocketStart);
-        wsOnReceiveRegister(_sensorWebSocketOnReceive);
+        wsKeyCheckRegister(_sensorWebSocketKeyCheck);
         wsOnSendRegister(_sensorWebSocketSendData);
     #endif
 

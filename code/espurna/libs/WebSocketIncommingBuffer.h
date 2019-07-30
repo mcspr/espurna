@@ -9,8 +9,8 @@ and slightly modified.
 
 #pragma once
 
-#define MAX_WS_MSG_SIZE 4000
-typedef std::function<void(AsyncWebSocketClient *client, uint8_t *data, size_t len)> AwsMessageHandler;
+#define MAX_WS_MSG_SIZE 4096
+using AwsMessageHandler = std::function<void(AsyncWebSocketClient *client, uint8_t *data, size_t len)>;
 
 class WebSocketIncommingBuffer {
 

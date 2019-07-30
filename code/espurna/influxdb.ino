@@ -17,7 +17,7 @@ SyncClientWrap * _idb_client;
 
 // -----------------------------------------------------------------------------
 
-bool _idbWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _idbWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "idb", 3) == 0);
 }
 
@@ -119,7 +119,7 @@ void idbSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_idbWebSocketOnSend);
-        wsOnReceiveRegister(_idbWebSocketOnReceive);
+        wsKeyCheckRegister(_idbWebSocketKeyCheck);
     #endif
 
     #if BROKER_SUPPORT

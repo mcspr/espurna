@@ -36,7 +36,7 @@ void buttonMQTT(unsigned char id, uint8_t event) {
 
 #if WEB_SUPPORT
 
-bool _buttonWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _buttonWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "btn", 3) == 0);
 }
 
@@ -243,7 +243,7 @@ void buttonSetup() {
 
     // Websocket Callbacks
     #if WEB_SUPPORT
-        wsOnReceiveRegister(_buttonWebSocketOnReceive);
+        wsKeyCheckRegister(_buttonWebSocketKeyCheck);
     #endif
 
     // Register loop

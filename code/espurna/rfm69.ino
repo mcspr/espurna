@@ -41,11 +41,11 @@ void _rfm69WebSocketOnSend(JsonObject& root) {
     root["rfm69Topic"] = getSetting("rfm69Topic", RFM69_DEFAULT_TOPIC);
     root["packetCount"] = _rfm69_packet_count;
     root["nodeCount"] = _rfm69_node_count;
-    JsonArray& mappings = root.createNestedArray("mapping");
+    JsonArray mappings = root.createNestedArray("mapping");
     for (unsigned char i=0; i<RFM69_MAX_TOPICS; i++) {
         unsigned char node = getSetting("node", i, 0).toInt();
         if (0 == node) break;
-        JsonObject& mapping = mappings.createNestedObject();
+        JsonObject mapping = mappings.createNestedObject();
         mapping["node"] = node;
         mapping["key"] = getSetting("key", i, "");
         mapping["topic"] = getSetting("topic", i, "");
@@ -53,7 +53,7 @@ void _rfm69WebSocketOnSend(JsonObject& root) {
 
 }
 
-bool _rfm69WebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _rfm69WebSocketKeyCheck(const char * key) {
     if (strncmp(key, "rfm69", 5) == 0) return true;
     if (strncmp(key, "node", 4) == 0) return true;
     if (strncmp(key, "key", 3) == 0) return true;
@@ -270,7 +270,7 @@ void rfm69Setup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_rfm69WebSocketOnSend);
-        wsOnReceiveRegister(_rfm69WebSocketOnReceive);
+        wsKeyCheckRegister(_rfm69WebSocketKeyCheck);
         wsOnActionRegister(_rfm69WebSocketOnAction);
     #endif
 

@@ -91,15 +91,14 @@ static bool _rfbToChar(byte * in, char * out, int n = RF_MESSAGE_SIZE) {
 
 void _rfbWebSocketSendCodeArray(unsigned char start, unsigned char size) {
     
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+    DynamicJsonDocument root(1024);
 
-    JsonObject& rfb = root.createNestedObject("rfb");
+    JsonObject rfb = root.createNestedObject("rfb");
     rfb["size"] = size;
     rfb["start"] = start;
 
-    JsonArray& on = rfb.createNestedArray("on");
-    JsonArray& off = rfb.createNestedArray("off");
+    JsonArray on = rfb.createNestedArray("on");
+    JsonArray off = rfb.createNestedArray("off");
 
     for (byte id=start; id<start+size; id++) {
         on.add(rfbRetrieve(id, true));
@@ -136,7 +135,7 @@ void _rfbWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& 
     if (strcmp(action, "rfbsend") == 0) rfbStore(data["id"], data["status"], data["data"].as<const char*>());
 }
 
-bool _rfbWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _rfbWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "rfb", 3) == 0);
 }
 
@@ -770,7 +769,7 @@ void rfbSetup() {
     #if WEB_SUPPORT
         wsOnSendRegister(_rfbWebSocketOnSend);
         wsOnActionRegister(_rfbWebSocketOnAction);
-        wsOnReceiveRegister(_rfbWebSocketOnReceive);
+        wsKeyCheckRegister(_rfbWebSocketKeyCheck);
     #endif
 
     #if TERMINAL_SUPPORT

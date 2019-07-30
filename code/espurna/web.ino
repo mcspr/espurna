@@ -46,11 +46,14 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 AsyncWebServer * _server;
 char _last_modified[50];
-std::vector<uint8_t> * _webConfigBuffer;
-bool _webConfigSuccess = false;
 
 std::vector<web_request_callback_f> _web_request_callbacks;
 std::vector<web_body_callback_f> _web_body_callbacks;
+
+bool _web_config_success = false;
+std::unique_ptr<std::vector<uint8_t>> _web_config_buffer;
+
+constexpr const size_t WEB_CONFIG_BUFFER_MAX = 4096;
 
 // -----------------------------------------------------------------------------
 // HOOKS
@@ -65,15 +68,17 @@ void _onDiscover(AsyncWebServerRequest *request) {
 
     webLog(request);
 
-    AsyncResponseStream *response = request->beginResponseStream("text/json");
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
 
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject &root = jsonBuffer.createObject();
+    const String board = getBoardName();
+    const String hostname = getSetting("hostname");
+
+    DynamicJsonDocument root(JSON_OBJECT_SIZE(4));
     root["app"] = APP_NAME;
     root["version"] = APP_VERSION;
-    root["hostname"] = getSetting("hostname");
-    root["device"] = getBoardName();
-    root.printTo(*response);
+    root["hostname"] = hostname.c_str();
+    root["device"] = board.c_str();
+    serializeJson(root, *response);
 
     request->send(response);
 
@@ -120,7 +125,7 @@ void _onPostConfig(AsyncWebServerRequest *request) {
     if (!webAuthenticate(request)) {
         return request->requestAuthentication(getSetting("hostname").c_str());
     }
-    request->send(_webConfigSuccess ? 200 : 400);
+    request->send(_web_config_success ? 200 : 400);
 }
 
 void _onPostConfigData(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -129,40 +134,38 @@ void _onPostConfigData(AsyncWebServerRequest *request, String filename, size_t i
         return request->requestAuthentication(getSetting("hostname").c_str());
     }
 
-    // No buffer
+    // Everything fit into the current data packet, no need to buffer
     if (final && (index == 0)) {
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& root = jsonBuffer.parseObject((char *) data);
-        if (root.success()) _webConfigSuccess = settingsRestoreJson(root);
+        _web_config_success = settingsRestoreJson((char*) data);
         return;
     }
 
-    // Buffer start => reset
-    if (index == 0) if (_webConfigBuffer) delete _webConfigBuffer;
+    // Reset existing buffer
+    if (index == 0 && _web_config_buffer) _web_config_buffer.reset(nullptr);
 
-    // init buffer if it doesn't exist
-    if (!_webConfigBuffer) {
-        _webConfigBuffer = new std::vector<uint8_t>();
-        _webConfigSuccess = false;
+    // ini
+    if (!_web_config_buffer) {
+        _web_config_buffer.reset(new std::vector<uint8_t>());
+        _web_config_success = false;
     }
 
-    // Copy
+    // Copy into the buffer, so that we can parse it all at once
     if (len > 0) {
-        _webConfigBuffer->reserve(_webConfigBuffer->size() + len);
-        _webConfigBuffer->insert(_webConfigBuffer->end(), data, data + len);
+        // ... and avoid buffering too much
+        if ((_web_config_buffer->size() + len) > std::min(WEB_CONFIG_BUFFER_MAX, getFreeHeap() - sizeof(std::vector<uint8_t>))) {
+            _web_config_buffer = nullptr;
+            request->send(500);
+            return;
+        }
+        _web_config_buffer->reserve(_web_config_buffer->size() + len);
+        _web_config_buffer->insert(_web_config_buffer->end(), data, data + len);
     }
 
-    // Ending
     if (final) {
-
-        _webConfigBuffer->push_back(0);
-
-        // Parse JSON
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& root = jsonBuffer.parseObject((char *) _webConfigBuffer->data());
-        if (root.success()) _webConfigSuccess = settingsRestoreJson(root);
-        delete _webConfigBuffer;
-
+        // config buffer needs '\0' at the end to behave like char string
+        _web_config_buffer->push_back(0);
+        _web_config_success = settingsRestoreJson((char*) _web_config_buffer->data());
+        _web_config_buffer = nullptr;
     }
 
 }

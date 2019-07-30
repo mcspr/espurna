@@ -22,7 +22,7 @@ std::vector<web_api_t> _apis;
 
 // -----------------------------------------------------------------------------
 
-bool _apiWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _apiWebSocketKeyCheck(const char* key) {
     return (strncmp(key, "api", 3) == 0);
 }
 
@@ -76,6 +76,40 @@ bool _asJson(AsyncWebServerRequest *request) {
     return asJson;
 }
 
+void _onAPIsText(AsyncWebServerRequest *request) {
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    String output;
+    output.reserve(48);
+    for (unsigned int i=0; i < _apis.size(); i++) {
+        output = "";
+        output += _apis[i].key;
+        output += " -> ";
+        output += "/api/";
+        output += _apis[i].key;
+        output += '\n';
+        response->write(output.c_str());
+    }
+    request->send(response);
+}
+
+void _onAPIsJson(AsyncWebServerRequest *request) {
+
+    DynamicJsonDocument root(1024);
+
+    for (unsigned int i=0; i < _apis.size(); i++) {
+        char buffer[48] = {0};
+        if (snprintf(buffer, sizeof(buffer), "/api/%s", _apis[i].key) > (sizeof(buffer) - 1)) {
+            request->send(500);
+            return;
+        }
+        root[_apis[i].key] = buffer;
+    }
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(root, *response);
+    request->send(response);
+
+}
+
 void _onAPIs(AsyncWebServerRequest *request) {
 
     webLog(request);
@@ -83,26 +117,10 @@ void _onAPIs(AsyncWebServerRequest *request) {
 
     bool asJson = _asJson(request);
 
-    char buffer[40];
-
-    String output;
     if (asJson) {
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& root = jsonBuffer.createObject();
-        for (unsigned int i=0; i < _apis.size(); i++) {
-            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
-            root[_apis[i].key] = String(buffer);
-        }
-        root.printTo(output);
-        jsonBuffer.clear();
-        request->send(200, "application/json", output);
-
+        _onAPIsJson(request);
     } else {
-        for (unsigned int i=0; i < _apis.size(); i++) {
-            snprintf_P(buffer, sizeof(buffer), PSTR("/api/%s"), _apis[i].key);
-            output += _apis[i].key + String(" -> ") + String(buffer) + String("\n");
-        }
-        request->send(200, "text/plain", output);
+        _onAPIsText(request);
     }
 
 }
@@ -221,7 +239,7 @@ void apiRegister(const char * key, api_get_callback_f getFn, api_put_callback_f 
 void apiSetup() {
     _apiConfigure();
     wsOnSendRegister(_apiWebSocketOnSend);
-    wsOnReceiveRegister(_apiWebSocketOnReceive);
+    wsKeyCheckRegister(_apiWebSocketKeyCheck);
     webRequestRegister(_apiRequestCallback);
     espurnaRegisterReload(_apiConfigure);
 }

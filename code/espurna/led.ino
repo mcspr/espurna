@@ -71,16 +71,16 @@ void _ledBlink(unsigned char id, unsigned long delayOff, unsigned long delayOn) 
 
 #if WEB_SUPPORT
 
-bool _ledWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _ledWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "led", 3) == 0);
 }
 
 void _ledWebSocketOnSend(JsonObject& root) {
     if (_ledCount() == 0) return;
     root["ledVisible"] = 1;
-    JsonArray& leds = root.createNestedArray("ledConfig");
+    JsonArray leds = root.createNestedArray("ledConfig");
     for (byte i=0; i<_ledCount(); i++) {
-        JsonObject& led = leds.createNestedObject();
+        JsonObject led = leds.createNestedObject();
         led["mode"] = getSetting("ledMode", i, "").toInt();
         led["relay"] = getSetting("ledRelay", i, "").toInt();
     }
@@ -201,7 +201,7 @@ void ledSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_ledWebSocketOnSend);
-        wsOnReceiveRegister(_ledWebSocketOnReceive);
+        wsKeyCheckRegister(_ledWebSocketKeyCheck);
     #endif
 
     #if BROKER_SUPPORT

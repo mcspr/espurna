@@ -124,7 +124,7 @@ void i2c_read_buffer(uint8_t address, uint8_t * buffer, size_t len);
 // MQTT
 // -----------------------------------------------------------------------------
 #if MQTT_SUPPORT
-    typedef std::function<void(unsigned int, const char *, const char *)> mqtt_callback_f;
+    typedef std::function<void(unsigned int, const char *, char *)> mqtt_callback_f;
     void mqttRegister(mqtt_callback_f callback);
     String mqttMagnitude(char * topic);
 #else
@@ -163,7 +163,7 @@ template<typename T> bool setSetting(const String& key, unsigned int index, T va
 template<typename T> String getSetting(const String& key, T defaultValue);
 template<typename T> String getSetting(const String& key, unsigned int index, T defaultValue);
 void settingsGetJson(JsonObject& data);
-bool settingsRestoreJson(JsonObject& data);
+bool settingsRestoreJson(char*, size_t);
 
 // -----------------------------------------------------------------------------
 // Terminal
@@ -208,17 +208,17 @@ void webRequestRegister(web_request_callback_f callback);
 // WebSockets
 // -----------------------------------------------------------------------------
 #if WEB_SUPPORT
-    typedef std::function<void(JsonObject&)> ws_on_send_callback_f;
+    using ws_on_send_callback_f = std::function<void(JsonObject&)>;
     void wsOnSendRegister(ws_on_send_callback_f callback);
-    void wsSend(uint32_t, JsonObject& root);
-    void wsSend(JsonObject& root);
+    void wsSend(uint32_t, JsonObject&);
+    void wsSend(JsonObject&);
     void wsSend(ws_on_send_callback_f sender);
 
-    typedef std::function<void(uint32_t, const char *, JsonObject&)> ws_on_action_callback_f;
+    using ws_on_action_callback_f = std::function<void(uint32_t, const char *, JsonObject&)>;
     void wsOnActionRegister(ws_on_action_callback_f callback);
 
-    typedef std::function<bool(const char *, JsonVariant&)> ws_on_receive_callback_f;
-    void wsOnReceiveRegister(ws_on_receive_callback_f callback);
+    using ws_key_check_callback_f = std::function<bool(const char *)>;
+    void wsKeyCheckRegister(ws_key_check_callback_f callback);
 
     bool wsConnected();
     bool wsConnected(uint32_t);
@@ -226,7 +226,7 @@ void webRequestRegister(web_request_callback_f callback);
 #else
     #define ws_on_send_callback_f void *
     #define ws_on_action_callback_f void *
-    #define ws_on_receive_callback_f void *
+    #define ws_key_check_callback_f void *
 #endif
 
 // -----------------------------------------------------------------------------

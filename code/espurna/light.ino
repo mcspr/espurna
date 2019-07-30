@@ -921,7 +921,7 @@ void lightTransitionTime(unsigned long m) {
 
 #if WEB_SUPPORT
 
-bool _lightWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _lightWebSocketKeyCheck(const char * key) {
     if (strncmp(key, "light", 5) == 0) return true;
     if (strncmp(key, "use", 3) == 0) return true;
     return false;
@@ -939,7 +939,7 @@ void _lightWebSocketStatus(JsonObject& root) {
         root["useCCT"] = _light_use_cct;
         root["mireds"] = _light_mireds;
     }
-    JsonArray& channels = root.createNestedArray("channels");
+    JsonArray channels = root.createNestedArray("channels");
     for (unsigned char id=0; id < _light_channel.size(); id++) {
         channels.add(lightChannel(id));
     }
@@ -1292,7 +1292,7 @@ void lightSetup() {
     #if WEB_SUPPORT
         wsOnSendRegister(_lightWebSocketOnSend);
         wsOnActionRegister(_lightWebSocketOnAction);
-        wsOnReceiveRegister(_lightWebSocketOnReceive);
+        wsKeyCheckRegister(_lightWebSocketKeyCheck);
     #endif
 
     #if API_SUPPORT

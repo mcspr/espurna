@@ -13,6 +13,8 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 bool _dcz_enabled = false;
 std::vector<bool> _dcz_relay_state;
 
+constexpr const size_t DOMOTICZ_JSON_BUFFER_MAX = 1024;
+
 //------------------------------------------------------------------------------
 // Private methods
 //------------------------------------------------------------------------------
@@ -52,8 +54,8 @@ void _domoticzLight(unsigned int idx, const JsonObject& root) {
 
     if (!lightHasColor()) return;
 
-    JsonObject& color = root["Color"];
-    if (!color.success()) return;
+    JsonObject color = root["Color"];
+    if (color.isNull()) return;
 
     // m field contains information about color mode (enum ColorMode from domoticz ColorSwitch.h):
     unsigned int cmode = color["m"];
@@ -96,7 +98,7 @@ void _domoticzLight(unsigned int idx, const JsonObject& root) {
 
 #endif
 
-void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) {
+void _domoticzMqtt(unsigned int type, const char * topic, char * payload) {
 
     if (!_dcz_enabled) return;
 
@@ -114,16 +116,17 @@ void _domoticzMqtt(unsigned int type, const char * topic, const char * payload) 
 
     if (type == MQTT_MESSAGE_EVENT) {
 
-        // Check topic
+        // we only care about 'out' topic
         if (dczTopicOut.equals(topic)) {
 
-            // Parse response
-            DynamicJsonBuffer jsonBuffer;
-            JsonObject& root = jsonBuffer.parseObject((char *) payload);
-            if (!root.success()) {
-                DEBUG_MSG_P(PSTR("[DOMOTICZ] Error parsing data\n"));
+            DynamicJsonDocument doc(DOMOTICZ_JSON_BUFFER_MAX);
+            DeserializationError error = deserializeJson(doc, payload);
+            if (error) {
+                DEBUG_MSG_P(PSTR("[DOMOTICZ] JSON parsing error: %s\n"), error.c_str());
                 return;
             }
+
+            JsonObject root = doc.as<JsonObject>();
 
             // IDX
             unsigned int idx = root["idx"];
@@ -166,7 +169,7 @@ void _domoticzBrokerCallback(const unsigned char type, const char * topic, unsig
 
 #if WEB_SUPPORT
 
-bool _domoticzWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _domoticzWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "dcz", 3) == 0);
 }
 
@@ -177,7 +180,7 @@ void _domoticzWebSocketOnSend(JsonObject& root) {
     root["dczTopicIn"] = getSetting("dczTopicIn", DOMOTICZ_IN_TOPIC);
     root["dczTopicOut"] = getSetting("dczTopicOut", DOMOTICZ_OUT_TOPIC);
 
-    JsonArray& relays = root.createNestedArray("dczRelays");
+    JsonArray relays = root.createNestedArray("dczRelays");
     for (unsigned char i=0; i<relayCount(); i++) {
         relays.add(domoticzIdx(i));
     }
@@ -249,7 +252,7 @@ void domoticzSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_domoticzWebSocketOnSend);
-        wsOnReceiveRegister(_domoticzWebSocketOnReceive);
+        wsKeyCheckRegister(_domoticzWebSocketKeyCheck);
     #endif
 
     #if BROKER_SUPPORT

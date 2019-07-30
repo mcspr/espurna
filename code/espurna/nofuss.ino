@@ -8,7 +8,7 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if NOFUSS_SUPPORT
 
-#include "NoFUSSClient.h"
+//#include "NoFUSSClient.h"
 
 unsigned long _nofussLastCheck = 0;
 unsigned long _nofussInterval = 0;
@@ -20,7 +20,7 @@ bool _nofussEnabled = false;
 
 #if WEB_SUPPORT
 
-bool _nofussWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _nofussWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "nofuss", 6) == 0);
 }
 
@@ -162,7 +162,7 @@ void nofussSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_nofussWebSocketOnSend);
-        wsOnReceiveRegister(_nofussWebSocketOnReceive);
+        wsKeyCheckRegister(_nofussWebSocketKeyCheck);
     #endif
 
     #if TERMINAL_SUPPORT

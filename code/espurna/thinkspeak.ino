@@ -63,7 +63,7 @@ void _tspkBrokerCallback(const unsigned char type, const char * topic, unsigned 
 
 #if WEB_SUPPORT
 
-bool _tspkWebSocketOnReceive(const char * key, JsonVariant& value) {
+bool _tspkWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "tspk", 4) == 0);
 }
 
@@ -75,7 +75,7 @@ void _tspkWebSocketOnSend(JsonObject& root) {
     root["tspkKey"] = getSetting("tspkKey");
     root["tspkClear"] = getSetting("tspkClear", THINGSPEAK_CLEAR_CACHE).toInt() == 1;
 
-    JsonArray& relays = root.createNestedArray("tspkRelays");
+    JsonArray relays = root.createNestedArray("tspkRelays");
     for (byte i=0; i<relayCount(); i++) {
         relays.add(getSetting("tspkRelay", i, 0).toInt());
     }
@@ -387,7 +387,7 @@ void tspkSetup() {
 
     #if WEB_SUPPORT
         wsOnSendRegister(_tspkWebSocketOnSend);
-        wsOnReceiveRegister(_tspkWebSocketOnReceive);
+        wsKeyCheckRegister(_tspkWebSocketKeyCheck);
     #endif
 
     #if BROKER_SUPPORT
