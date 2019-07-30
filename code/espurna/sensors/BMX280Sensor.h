@@ -162,7 +162,7 @@ class BMX280Sensor : public I2CSensor {
             JsonArray fields = sensor.createNestedArray("fields");
 
             {
-                JsonObject& field = fields.createNestedObject();
+                JsonObject field = fields.createNestedObject();
                 field["tag"] = UI_TAG_SELECT;
                 field["name"] = "address";
                 field["label"] = "Address";

@@ -50,13 +50,13 @@ void _haSendMagnitudes(const JsonObject& deviceConfig) {
 
         String output;
         if (_haEnabled) {
-            output.reserve(512);
-            DynamicJsonDocument config(768);
+            output.reserve(768);
+            DynamicJsonDocument config(512);
             _haSendMagnitude(i, config);
             config["uniq_id"] = getIdentifier() + "_" + magnitudeTopic(magnitudeType(i)) + "_" + String(i);
             config["device"] = deviceConfig;
             
-            config.printTo(output);
+            serializeJson(config, output);
         }
 
         mqttSendRaw(topic.c_str(), output.c_str());
@@ -204,7 +204,8 @@ void _haDumpConfig(std::function<void(String&)> printer, bool wrapJson = false) 
 
         for (unsigned char i=0; i<magnitudeCount(); i++) {
 
-            DynamicJsonDocument config(512);
+            DynamicJsonDocument doc(768);
+            JsonObject config = doc.as<JsonObject>();
             _haSendMagnitude(i, config);
 
             String output;
