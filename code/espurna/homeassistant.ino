@@ -51,7 +51,8 @@ void _haSendMagnitudes(const JsonObject& deviceConfig) {
         String output;
         if (_haEnabled) {
             output.reserve(768);
-            DynamicJsonDocument config(512);
+            DynamicJsonDocument doc(512);
+            JsonObject config = doc.as<JsonObject>();
             _haSendMagnitude(i, config);
             config["uniq_id"] = getIdentifier() + "_" + magnitudeTopic(magnitudeType(i)) + "_" + String(i);
             config["device"] = deviceConfig;
@@ -225,9 +226,9 @@ void _haDumpConfig(std::function<void(String&)> printer, bool wrapJson = false) 
                 } else {
                     output += "    ";
                 }
-                String value = kv.value.as<String>();
+                String value = kv.value().as<const char*>();
                 value.replace("%", "'%'");
-                output += kv.key;
+                output += kv.key().c_str();
                 output += ": ";
                 output += value;
                 output += "\n";
