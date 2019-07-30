@@ -98,7 +98,7 @@ void _onAPIsJson(AsyncWebServerRequest *request) {
 
     for (unsigned int i=0; i < _apis.size(); i++) {
         char buffer[48] = {0};
-        if (snprintf(buffer, sizeof(buffer), "/api/%s", _apis[i].key) > (sizeof(buffer) - 1)) {
+        if (snprintf(buffer, sizeof(buffer), "/api/%s", _apis[i].key) >= static_cast<int>(sizeof(buffer))) {
             request->send(500);
             return;
         }

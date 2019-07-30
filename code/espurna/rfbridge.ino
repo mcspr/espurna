@@ -91,7 +91,8 @@ static bool _rfbToChar(byte * in, char * out, int n = RF_MESSAGE_SIZE) {
 
 void _rfbWebSocketSendCodeArray(unsigned char start, unsigned char size) {
     
-    DynamicJsonDocument root(1024);
+    DynamicJsonDocument doc(1024);
+    JsonObject root = doc.as<JsonObject>();
 
     JsonObject rfb = root.createNestedObject("rfb");
     rfb["size"] = size;
