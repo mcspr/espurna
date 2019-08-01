@@ -210,8 +210,8 @@ void webRequestRegister(web_request_callback_f callback);
 #if WEB_SUPPORT
     using ws_on_send_callback_f = std::function<void(JsonObject&)>;
     void wsOnSendRegister(ws_on_send_callback_f callback);
-    void wsSend(uint32_t, JsonObject&);
-    void wsSend(JsonObject&);
+    void wsSend(uint32_t, JsonObject&, size_t = 0);
+    void wsSend(JsonObject&, size_t = 0);
     void wsSend(ws_on_send_callback_f sender);
 
     using ws_on_action_callback_f = std::function<void(uint32_t, const char *, JsonObject&)>;

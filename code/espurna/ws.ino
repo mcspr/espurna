@@ -76,20 +76,31 @@ bool _wsAuth(AsyncWebSocketClient * client) {
 #if DEBUG_WEB_SUPPORT
 
 bool wsDebugSend(const char* prefix, const char* message) {
+
     if (!wsConnected()) return false;
-    if (getFreeHeap() < (strlen(message) * 3)) return false;
 
-    constexpr size_t WS_SEND_DEBUG_JSON_BUFFER_MAX = 256;
+    // via: https://arduinojson.org/v6/assistant/
+    // we use 1 object for "weblog", 2nd one for "message". "prefix", optional
+    constexpr size_t WS_SEND_DEBUG_JSON_BUFFER_MAX = JSON_OBJECT_SIZE(3);
 
-    DynamicJsonDocument doc(WS_SEND_DEBUG_JSON_BUFFER_MAX);
+    StaticJsonDocument<WS_SEND_DEBUG_JSON_BUFFER_MAX> doc;
     JsonObject weblog = doc.createNestedObject("weblog");
 
+    // {"weblog":}
+    size_t len = 11;
+
     weblog["message"] = message;
+    // {"message":""}
+    len += (strlen(message) + 14);
+
     if (prefix && (prefix[0] != '\0')) {
         weblog["prefix"] = prefix;
+        // ","prefix":""
+        len += (strlen(prefix) + 13);
     }
 
-    wsSend(weblog);
+
+    wsSend(weblog, len);
 
     return true;
 }
@@ -374,23 +385,25 @@ void _wsOnStart(JsonObject& root) {
 
 }
 
-void wsSend(JsonObject& root){
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(root.size() + 1);
+void wsSend(JsonObject& root, size_t len){
+    if (!len) len = measureJson(root);
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
 
     if (buffer) {
-        serializeJson(root, reinterpret_cast<char*>(buffer->get()), buffer->length());
+        serializeJson(root, reinterpret_cast<char*>(buffer->get()), buffer->length() + 1);
         _ws.textAll(buffer);
     }
 }
 
-void wsSend(uint32_t client_id, JsonObject& root) {
+void wsSend(uint32_t client_id, JsonObject& root, size_t len) {
     AsyncWebSocketClient* client = _ws.client(client_id);
     if (client == nullptr) return;
 
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(root.size() + 1);
+    if (!len) len = measureJson(root);
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
 
     if (buffer) {
-        serializeJson(root, reinterpret_cast<char*>(buffer->get()), buffer->length());
+        serializeJson(root, reinterpret_cast<char*>(buffer->get()), buffer->length() + 1);
         _ws.textAll(buffer);
     }
 }
@@ -530,10 +543,10 @@ void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
     JsonObject root = doc.as<JsonObject>();
     callback(root);
 
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(doc.size() + 1);
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(doc.size());
 
     if (buffer) {
-        serializeJson(doc, reinterpret_cast<char*>(buffer->get()), buffer->length());
+        serializeJson(doc, reinterpret_cast<char*>(buffer->get()), buffer->length() + 1);
         client->text(buffer);
     }
 }
