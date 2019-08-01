@@ -72,8 +72,6 @@ struct ping_ctx_t {
         STOPPED,
         IDLE,
         SENT,
-        FAILED,
-        OK
     };
 
     state_t state = STOPPED;
@@ -198,6 +196,18 @@ void ping_raw_init(ping_ctx_t *ctx, const ip_addr_t* ping_addr) {
     }
 }
 
+const char* ping_state_debug(ping_ctx_t *ctx) {
+
+    switch (ctx->state) {
+        case ping_ctx_t::STOPPED: return "STOPPED";
+        case ping_ctx_t::IDLE: return "IDLE";
+        case ping_ctx_t::SENT: return "SENT";
+        default: break;
+    }
+
+    return "UNKNOWN";
+}
+
 extern "C" struct netif* eagle_lwip_getif (int netif_index);
 
 class PingSensor : public BaseSensor {
@@ -289,8 +299,20 @@ class PingSensor : public BaseSensor {
         }
 
         void tick() {
-            if (ping_ctx.state == ping_ctx_t::FAILED) {
-                ping_send_and_wait(&ping_ctx);
+            static uint32_t report_last = millis();
+            static uint32_t reset_last = millis();
+
+            if (millis() - report_last > 1000) {
+                report_last = millis();
+                DEBUG_MSG("[PING] ping_ctx state=%s seq_num=%u seq_fail=%u\n", ping_state_debug(&ping_ctx), ping_ctx.seq_num, ping_ctx.seq_fail);
+            }
+
+            if (millis() - reset_last > 15000) {
+                reset_last = millis();
+                if (ping_ctx.seq_fail > ping_ctx.seq_retries) {
+                    ping_ctx.seq_fail = 0;
+                    ping_ctx.seq_num = 0;
+                }
             }
         }
 
