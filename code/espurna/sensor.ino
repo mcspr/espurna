@@ -880,6 +880,17 @@ void _sensorLoad() {
         _sensors.push_back(sensor);
     }
     #endif
+
+    #if PING_SUPPORT
+    {
+        PingSensor * sensor = new PingSensor();
+        wifiRegister([&sensor](justwifi_messages_t code, char * parameter) {
+            if ((code == MESSAGE_CONNECTED) && sensor->useGatewayIP()) sensor->updateGatewayIP();
+        });
+        sensor->configure();
+        _sensors.push_back(sensor);
+    }
+    #endif
 }
 
 void _sensorCallback(unsigned char i, unsigned char type, double value) {
@@ -1049,6 +1060,13 @@ void _sensorInit() {
                 sensor->setEnergyRatio(getSetting("pwrRatioE", PULSEMETER_ENERGY_RATIO).toInt());
             }
         #endif // PULSEMETER_SUPPORT
+
+        #if PING_SUPPORT
+            if (_sensors[i]->getID() == SENSOR_PING_ID) {
+                PingSensor *sensor = (PingSensor *) _sensors[i];
+                sensor->configure();
+            }
+        #endif // PING_SUPPORT
 
     }
 

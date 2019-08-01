@@ -934,6 +934,28 @@
 #define EZOPH_SYNC_INTERVAL          1000    // Amount of time (in ms) sync new readings.
 #endif
 
+// -- PING
+
+#ifndef PING_SUPPORT
+#define PING_SUPPORT                 1
+#endif
+
+#ifndef PING_ADDRESS
+#define PING_ADDRESS                 0       // If 0, address is the gateway IP
+#endif
+
+#ifndef PING_DELAY
+#define PING_DELAY                   5000
+#endif
+
+#ifndef PING_RETRIES
+#define PING_RETRIES                 5
+#endif
+
+#ifndef PING_ID
+#define PING_ID                      0x8266 // Identifier code. Must fit into u16_t
+#endif
+
 // =============================================================================
 // Sensor helpers configuration - can't move to dependencies.h
 // =============================================================================
@@ -975,7 +997,8 @@
     VEML6075_SUPPORT || \
     VL53L1X_SUPPORT || \
     MAX6675_SUPPORT || \
-    EZOPH_SUPPORT \
+    EZOPH_SUPPORT || \
+    PING_SUPPORT \
 )
 #endif
 
@@ -1159,6 +1182,10 @@
 
 #if VL53L1X_SUPPORT
     #include "../sensors/VL53L1XSensor.h"
+#endif
+
+#if PING_SUPPORT
+    #include "../sensors/PingSensor.h"
 #endif
 
 #endif // SENSOR_SUPPORT
