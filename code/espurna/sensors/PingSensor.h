@@ -364,7 +364,7 @@ class PingSensor : public BaseSensor {
         // Current value for slot # index
         double value(unsigned char index) {
             if (index == 0) {
-                return (ping_ctx.state == ping_ctx_t::OK) ? 1 : 0;
+                return ((ping_ctx.seq_num > 0) && (ping_ctx.seq_fail < ping_ctx.seq_retries)) ? 1 : 0;
             }
 
             return 0;

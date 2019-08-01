@@ -884,7 +884,7 @@ void _sensorLoad() {
     #if PING_SUPPORT
     {
         PingSensor * sensor = new PingSensor();
-        wifiRegister([&sensor](justwifi_messages_t code, char * parameter) {
+        wifiRegister([sensor](justwifi_messages_t code, char * parameter) {
             if ((code == MESSAGE_CONNECTED) && sensor->useGatewayIP()) sensor->updateGatewayIP();
         });
         sensor->configure();
