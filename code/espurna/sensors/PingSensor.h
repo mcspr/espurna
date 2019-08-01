@@ -78,12 +78,11 @@ struct ping_ctx_t {
     uint16_t id = PING_ID;
     uint16_t delay = PING_DELAY;
 
-    uint16_t seq_timeout = 2000;
+    uint16_t seq_timeout = PING_TIMEOUT;
     uint16_t seq_retries = PING_RETRIES;
-    uint16_t seq_fail = 0;
     uint16_t seq_num = 0;
 
-    uint32_t time = 0;
+    uint32_t last_recv = 0;
 
     ip_addr_t target;
     struct raw_pcb *pcb;
@@ -106,6 +105,8 @@ u8_t ping_recv(void* arg, struct raw_pcb* pcb, struct pbuf* p, const ip_addr_t* 
     LWIP_UNUSED_ARG(addr);
     LWIP_ASSERT("p != NULL", p != NULL);
 
+    ctx->state = ping_ctx_t::IDLE;
+
     // STABLE-1_4_0: if (pbuf_header( p, -PBUF_IP_HLEN)==0) {
     DEBUG_MSG("[PING] ping_recv pbuf tot_len=%u expected=%u\n", p->tot_len, (PBUF_IP_HLEN + sizeof(struct icmp_echo_hdr)));
     if ((p->tot_len >= (PBUF_IP_HLEN + sizeof(struct icmp_echo_hdr)))
@@ -119,8 +120,7 @@ u8_t ping_recv(void* arg, struct raw_pcb* pcb, struct pbuf* p, const ip_addr_t* 
         DEBUG_MSG("[PING] ping_recv iecho id=%x seqno=%u expected=%u\n", iecho->id, lwip_ntohs(iecho->seqno), ctx->seq_num);
         if ((iecho->id == ctx->id) && (iecho->seqno == lwip_htons(ctx->seq_num))) {
             DEBUG_MSG("[PING] ping_recv OK\n");
-            ctx->state = ping_ctx_t::IDLE;
-            --ctx->seq_fail;
+            ctx->last_recv = sys_now();
             pbuf_free(p);
             return 1; /* eat the packet */
         }
@@ -174,17 +174,17 @@ void ping_periodic(struct ping_ctx_t *ctx) {
     }
     #endif
 
-    if (ctx->state == ping_ctx_t::SENT) {
-        // bail out after timeout
-        if (ctx->time - sys_now() > ctx->seq_timeout) {
-            DEBUG_MSG("[PING] ping timeout\n");
-            ctx->state = ping_ctx_t::IDLE;
-            return;
-        }
-        // don't try to send multiple requests
-        DEBUG_MSG("[PING] ping_periodic waiting until IDLE\n");
-        return;
+    // bail out after timeout
+    if (sys_now() - ctx->last_recv > ctx->seq_timeout) {
+        ctx->state = ping_ctx_t::IDLE;
+        DEBUG_MSG("[PING] ping timeout\n");
     }
+
+    // don't try to send multiple requests
+    //if (ctx->state == ping_ctx_t::SENT) {
+    //    DEBUG_MSG("[PING] ping_periodic waiting until IDLE\n");
+    //    return;
+    //}
 
     struct pbuf *p;
     struct icmp_echo_hdr *iecho;
@@ -199,7 +199,6 @@ void ping_periodic(struct ping_ctx_t *ctx) {
     if ((p->len == p->tot_len) && (p->next == nullptr)) {
         // lwip1 XXX: this was moved from inside of ping_prepare_echo
         // lwip_htons is a one-line macro, increment happens twice
-        ++ctx->seq_fail;
         ++ctx->seq_num;
 
         iecho = (struct icmp_echo_hdr *)p->payload;
@@ -209,7 +208,6 @@ void ping_periodic(struct ping_ctx_t *ctx) {
             ipaddr_ntoa(&ctx->target), ctx->seq_num, ping_size);
         raw_sendto(ctx->pcb, p, &ctx->target);
 
-        ctx->time = sys_now();
         ctx->state = ping_ctx_t::SENT;
     }
     pbuf_free(p);
@@ -288,6 +286,7 @@ class PingSensor : public BaseSensor {
         }
 
         void setRetries(uint16_t value) {
+            ping_ctx.seq_timeout = ping_ctx.delay * value;
             ping_ctx.seq_retries = value;
         }
 
@@ -349,22 +348,14 @@ class PingSensor : public BaseSensor {
 
             if (millis() - report_last > 1000) {
                 report_last = millis();
-                DEBUG_MSG("[PING] ping_ctx state=%s seq_num=%u seq_fail=%u\n", ping_state_debug(&ping_ctx), ping_ctx.seq_num, ping_ctx.seq_fail);
-            }
-
-            if (millis() - reset_last > 15000) {
-                reset_last = millis();
-                if (ping_ctx.seq_fail > ping_ctx.seq_retries) {
-                    ping_ctx.seq_fail = 0;
-                    ping_ctx.seq_num = 0;
-                }
+                DEBUG_MSG("[PING] ping_ctx state=%s seq_num=%u\n", ping_state_debug(&ping_ctx), ping_ctx.seq_num);
             }
         }
 
         // Current value for slot # index
         double value(unsigned char index) {
             if (index == 0) {
-                return ((ping_ctx.seq_num > 0) && (ping_ctx.seq_fail < ping_ctx.seq_retries)) ? 1 : 0;
+                return ((ping_ctx.last_recv > 0) && (sys_now() - ping_ctx.last_recv < ping_ctx.seq_timeout)) ? 1 : 0;
             }
 
             return 0;

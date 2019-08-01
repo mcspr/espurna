@@ -952,6 +952,10 @@
 #define PING_RETRIES                 5
 #endif
 
+#ifndef PING_TIMEOUT
+#define PING_TIMEOUT                 (PING_DELAY * PING_RETRIES)
+#endif
+
 #ifndef PING_ID
 #define PING_ID                      0x8266 // Identifier code. Must fit into u16_t
 #endif
