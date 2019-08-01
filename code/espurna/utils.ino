@@ -9,6 +9,16 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <Ticker.h>
 #include "libs/HeapStats.h"
 
+const char* getChipID() {
+    static char chipid[7] = {0};
+    static bool set = false;
+    if (!set) {
+        snprintf_P(chipid, sizeof(chipid), PSTR("%06X"), ESP.getChipId());
+        set = true;
+    }
+    return chipid;
+}
+
 String getIdentifier() {
     char buffer[20];
     snprintf_P(buffer, sizeof(buffer), PSTR("%s-%06X"), APP_NAME, ESP.getChipId());

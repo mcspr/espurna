@@ -495,6 +495,20 @@ void _wifiWebSocketOnAction(uint32_t client_id, const char * action, JsonObject&
 // INFO
 // -----------------------------------------------------------------------------
 
+const char* wifiBSSID() {
+    static char bssid_str[20] = {0};
+    static bool set = false;
+    if (!set) {
+        set = true;
+        uint8_t * bssid = WiFi.BSSID();
+        snprintf_P(bssid_str, sizeof(bssid_str),
+            PSTR("%02X:%02X:%02X:%02X:%02X:%02X"),
+            bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]
+        );
+    }
+    return bssid_str;
+}
+
 void wifiDebug(WiFiMode_t modes) {
 
     #if DEBUG_SUPPORT
@@ -511,9 +525,7 @@ void wifiDebug(WiFiMode_t modes) {
         DEBUG_MSG_P(PSTR("[WIFI] DNS   %s\n"), WiFi.dnsIP().toString().c_str());
         DEBUG_MSG_P(PSTR("[WIFI] MASK  %s\n"), WiFi.subnetMask().toString().c_str());
         DEBUG_MSG_P(PSTR("[WIFI] HOST  http://%s.local\n"), WiFi.hostname().c_str());
-        DEBUG_MSG_P(PSTR("[WIFI] BSSID %02X:%02X:%02X:%02X:%02X:%02X\n"),
-            bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], bssid[6]
-        );
+        DEBUG_MSG_P(PSTR("[WIFI] BSSID %s\n"), wifiBSSID());
         DEBUG_MSG_P(PSTR("[WIFI] CH    %d\n"), WiFi.channel());
         DEBUG_MSG_P(PSTR("[WIFI] RSSI  %d\n"), WiFi.RSSI());
         footer = true;

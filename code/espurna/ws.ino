@@ -335,29 +335,21 @@ bool _wsKeyCheck(const char * key) {
 }
 
 void _wsOnStart(JsonObject& root) {
-    char chipid[7];
-    snprintf_P(chipid, sizeof(chipid), PSTR("%06X"), ESP.getChipId());
-    uint8_t * bssid = WiFi.BSSID();
-    char bssid_str[20];
-    snprintf_P(bssid_str, sizeof(bssid_str),
-        PSTR("%02X:%02X:%02X:%02X:%02X:%02X"),
-        bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]
-    );
-
     root["webMode"] = WEB_MODE_NORMAL;
 
     root["app_name"] = APP_NAME;
     root["app_version"] = APP_VERSION;
-    root["app_build"] = buildTime();
+    root["device"] = DEVICE;
+    root["manufacturer"] = MANUFACTURER;
     #if defined(APP_REVISION)
         root["app_revision"] = APP_REVISION;
     #endif
-    root["manufacturer"] = MANUFACTURER;
-    root["chipid"] = String(chipid);
+
+    root["app_build"] = buildTime();
+    root["chipid"] = getChipID();
     root["mac"] = WiFi.macAddress();
-    root["bssid"] = String(bssid_str);
+    root["bssid"] = wifiBSSID();
     root["channel"] = WiFi.channel();
-    root["device"] = DEVICE;
     root["hostname"] = getSetting("hostname");
     root["desc"] = getSetting("desc");
     root["network"] = getNetwork();
@@ -373,6 +365,7 @@ void _wsOnStart(JsonObject& root) {
     #if TERMINAL_SUPPORT
         root["cmdVisible"] = 1;
     #endif
+
     root["hbMode"] = getSetting("hbMode", HEARTBEAT_MODE).toInt();
     root["hbInterval"] = getSetting("hbInterval", HEARTBEAT_INTERVAL).toInt();
 
