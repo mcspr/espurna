@@ -211,6 +211,7 @@ void webRequestRegister(web_request_callback_f callback);
     using ws_on_send_callback_f = std::function<void(JsonObject&)>;
     void wsOnSendRegister(ws_on_send_callback_f callback);
     void wsSend(uint32_t, JsonObject&, size_t = 0);
+    void wsSend(JsonDocument&, size_t = 0);
     void wsSend(JsonObject&, size_t = 0);
     void wsSend(ws_on_send_callback_f sender);
 

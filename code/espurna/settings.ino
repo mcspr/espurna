@@ -228,8 +228,7 @@ bool settingsRestoreJson(char* json_string, size_t json_buffer_size = 1024) {
         return false;
     }
 
-    JsonObject data = doc.as<JsonObject>();
-    settingsRestoreJson(data);
+    return settingsRestoreJson(doc.as<JsonObject>());
 
 }
 
