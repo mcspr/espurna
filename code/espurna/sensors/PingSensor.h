@@ -168,14 +168,6 @@ void ping_send_and_wait(struct ping_ctx_t*);
 void ping_cb(void* arg) {
 
     struct ping_ctx_t* ctx = (struct ping_ctx_t*)arg;
-
-    if (ctx->seq_fail > ctx->seq_retries) {
-        ctx->state = ping_ctx_t::FAILED;
-        ctx->seq_num = 0;
-        ctx->seq_fail = 0;
-        return;
-    }
-
     ping_send_and_wait(ctx);
 
 }
