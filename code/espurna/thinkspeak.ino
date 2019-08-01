@@ -67,12 +67,24 @@ bool _tspkWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "tspk", 4) == 0);
 }
 
-void _tspkWebSocketOnSend(JsonObject& root) {
+void _tspkWebSocketOnSend(uint32_t client_id) {
+
+    const String api_key = getSetting("tspkKey");
+
+    // TODO: re-do websocketmagntiudes generator as separate callback?
+    #if SENSOR_SUPPORT
+        constexpr const size_t DOC_SIZE = 1024;
+    #else
+        const size_t DOC_SIZE =
+            JSON_OBJECT_SIZE(5)
+            + JSON_ARRAY_SIZE(relayCount());
+    #endif
+    DynamicJsonDocument root(DOC_SIZE);
 
     unsigned char visible = 0;
 
+    root["tspkKey"] = api_key.c_str();
     root["tspkEnabled"] = getSetting("tspkEnabled", THINGSPEAK_ENABLED).toInt() == 1;
-    root["tspkKey"] = getSetting("tspkKey");
     root["tspkClear"] = getSetting("tspkClear", THINGSPEAK_CLEAR_CACHE).toInt() == 1;
 
     JsonArray relays = root.createNestedArray("tspkRelays");
@@ -87,6 +99,8 @@ void _tspkWebSocketOnSend(JsonObject& root) {
     #endif
 
     root["tspkVisible"] = visible;
+
+    wsSend(client_id, root);
 
 }
 

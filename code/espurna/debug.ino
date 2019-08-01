@@ -92,8 +92,10 @@ void debugSendImpl(const char * message) {
 
 void debugWebSetup() {
 
-    wsOnSendRegister([](JsonObject& root) {
+    wsOnSendRegister([](uint32_t client_id) {
+        StaticJsonDocument<JSON_OBJECT_SIZE(1) + 2> root;
         root["dbgVisible"] = 1;
+        wsSend(client_id, root);
     });
 
     wsOnActionRegister([](uint32_t client_id, const char * action, JsonObject& data) {

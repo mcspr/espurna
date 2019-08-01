@@ -1597,7 +1597,7 @@ void sensorLoop() {
         _sensorPost();
 
         #if WEB_SUPPORT
-            wsSend(_sensorWebSocketSendData);
+            wsSendFunc(_sensorWebSocketSendData);
         #endif
 
         #if THINGSPEAK_SUPPORT

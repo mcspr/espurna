@@ -22,6 +22,9 @@ std::vector<ws_on_send_callback_f> _ws_on_send_callbacks;
 std::vector<ws_on_action_callback_f> _ws_on_action_callbacks;
 std::vector<ws_key_check_callback_f> _ws_key_check_callbacks;
 
+uint32_t _ws_bootstrap_client_id = 0;
+uint32_t _ws_bootstrap_client_count = 0;
+
 // -----------------------------------------------------------------------------
 // Private methods
 // -----------------------------------------------------------------------------
@@ -94,6 +97,7 @@ bool wsDebugSend(const char* prefix, const char* message) {
         weblog["prefix"] = prefix;
     }
 
+    Serial.printf("wsdebugsend: usage=%u estimate=%u\n", doc.memoryUsage(), JSON_OBJECT_SIZE(3));
 
     wsSend(doc, len);
 
@@ -298,7 +302,11 @@ void _wsParse(AsyncWebSocketClient *client, uint8_t * payload, size_t length) {
 
 }
 
-void _wsUpdate(JsonObject& root) {
+void _wsUpdate(uint32_t client_id) {
+
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(6) + (6 * 2);
+    StaticJsonDocument<DOC_SIZE> root;
+
     root["heap"] = getFreeHeap();
     root["uptime"] = getUptime();
     root["rssi"] = WiFi.RSSI();
@@ -309,6 +317,8 @@ void _wsUpdate(JsonObject& root) {
     #if NTP_SUPPORT
         if (ntpSynced()) root["now"] = now();
     #endif
+
+    wsSend(client_id, root);
 }
 
 void _wsDoUpdate(bool reset = false) {
@@ -320,7 +330,7 @@ void _wsDoUpdate(bool reset = false) {
 
     if (millis() - last > WS_UPDATE_INTERVAL) {
         last = millis();
-        wsSend(_wsUpdate);
+        _wsUpdate(0);
     }
 }
 
@@ -334,40 +344,58 @@ bool _wsKeyCheck(const char * key) {
     return false;
 }
 
-void _wsOnStart(JsonObject& root) {
+void _wsOnStart(uint32_t client_id) {
+
+    const String build_time = buildTime();
+
+    const String hostname = getSetting("hostname");
+    const String mac_address = WiFi.macAddress();
+    const String bssid = WiFi.BSSIDstr();
+    const String description = getSetting("desc");
+    const String network = getNetwork();
+    const String ip = getIP();
+
+    const String sdk = ESP.getSdkVersion();
+    const String core = getCoreVersion();
+
+    // 21 keys and 6 ints -> 346 heap usage
+    const size_t DOC_SIZE = JSON_OBJECT_SIZE(21) + (6 * 2);
+
+    DynamicJsonDocument root(DOC_SIZE);
+
+    //Serial.printf("[wsOnStart] estimated=%u usage=%u\n", DOC_SIZE, root.memoryUsage());
+
     root["webMode"] = WEB_MODE_NORMAL;
 
     root["app_name"] = APP_NAME;
     root["app_version"] = APP_VERSION;
-    root["device"] = DEVICE;
-    root["manufacturer"] = MANUFACTURER;
+    root["app_build"] = build_time.c_str();
     #if defined(APP_REVISION)
         root["app_revision"] = APP_REVISION;
     #endif
 
-    root["app_build"] = buildTime();
+    root["device"] = DEVICE;
+    root["manufacturer"] = MANUFACTURER;
+
     root["chipid"] = getChipID();
-    root["mac"] = WiFi.macAddress();
-    root["bssid"] = wifiBSSID();
+    root["mac"] = mac_address.c_str();
+    root["bssid"] = bssid.c_str();
     root["channel"] = WiFi.channel();
-    root["hostname"] = getSetting("hostname");
-    root["desc"] = getSetting("desc");
-    root["network"] = getNetwork();
-    root["deviceip"] = getIP();
+    root["hostname"] = hostname.c_str();
+    root["desc"] = description.c_str();
+    root["network"] = network.c_str();
+    root["deviceip"] = ip.c_str();
+
+    root["sdk"] = sdk.c_str();
+    root["core"] = core.c_str();
+
     root["sketch_size"] = ESP.getSketchSize();
     root["free_size"] = ESP.getFreeSketchSpace();
-    root["sdk"] = ESP.getSdkVersion();
-    root["core"] = getCoreVersion();
 
-    root["btnDelay"] = getSetting("btnDelay", BUTTON_DBLCLICK_DELAY).toInt();
     root["webPort"] = getSetting("webPort", WEB_PORT).toInt();
     root["wsAuth"] = getSetting("wsAuth", WS_AUTHENTICATION).toInt() == 1;
-    #if TERMINAL_SUPPORT
-        root["cmdVisible"] = 1;
-    #endif
 
-    root["hbMode"] = getSetting("hbMode", HEARTBEAT_MODE).toInt();
-    root["hbInterval"] = getSetting("hbInterval", HEARTBEAT_INTERVAL).toInt();
+    wsSend(client_id, root);
 
     _wsDoUpdate(true);
 
@@ -393,7 +421,12 @@ void wsSend(JsonObject& source, size_t len) {
     }
 }
 
-void wsSend(uint32_t client_id, JsonObject& source, size_t len) {
+void wsSend(uint32_t client_id, JsonDocument& source, size_t len) {
+
+    if (!client_id) {
+        wsSend(source, len);
+        return;
+    }
 
     AsyncWebSocketClient* client = _ws.client(client_id);
     if (client == nullptr) return;
@@ -403,7 +436,26 @@ void wsSend(uint32_t client_id, JsonObject& source, size_t len) {
 
     if (buffer) {
         serializeJson(source, reinterpret_cast<char*>(buffer->get()), buffer->length() + 1);
-        _ws.textAll(buffer);
+        client->text(buffer);
+    }
+}
+
+void wsSend(uint32_t client_id, JsonObject& source, size_t len) {
+
+    if (!client_id) {
+        wsSend(source, len);
+        return;
+    }
+
+    AsyncWebSocketClient* client = _ws.client(client_id);
+    if (client == nullptr) return;
+
+    if (!len) len = measureJson(source);
+    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+
+    if (buffer) {
+        serializeJson(source, reinterpret_cast<char*>(buffer->get()), buffer->length() + 1);
+        client->text(buffer);
     }
 }
 
@@ -414,22 +466,14 @@ void _wsStart(uint32_t client_id) {
         bool changePassword = false;
     #endif
 
-    constexpr const size_t WS_START_JSON_BUFFER_MAX = 1024;
-
-    DynamicJsonDocument doc(WS_START_JSON_BUFFER_MAX);
-    JsonObject root = doc.as<JsonObject>();
-
     if (changePassword) {
+        StaticJsonDocument<JSON_OBJECT_SIZE(1) + 2> root;
         root["webMode"] = WEB_MODE_PASSWORD;
         wsSend(client_id, root);
         return;
     }
 
-    for (auto& callback : _ws_on_send_callbacks) {
-        callback(root);
-    }
-
-    wsSend(client_id, root);
+    _ws_bootstrap_client_id = client_id;
 }
 
 void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
@@ -478,7 +522,24 @@ void _wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTy
 
 void _wsLoop() {
     if (!wsConnected()) return;
+
     _wsDoUpdate();
+
+    if (_ws_bootstrap_client_id) {
+        AsyncWebSocketClient* client = _ws.client(_ws_bootstrap_client_id);
+        if (!client) {
+            _ws_bootstrap_client_id = 0;
+            _ws_bootstrap_client_count = 0;
+            return;
+        }
+        if (client->queueIsFull()) return;
+        (_ws_on_send_callbacks[_ws_bootstrap_client_count++])(_ws_bootstrap_client_id);
+        if (_ws_bootstrap_client_count >= _ws_on_send_callbacks.size()) {
+            _ws_bootstrap_client_count = 0;
+            _ws_bootstrap_client_id = 0;
+        }
+        yield();
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -505,20 +566,7 @@ void wsOnActionRegister(ws_on_action_callback_f callback) {
     _ws_on_action_callbacks.push_back(callback);
 }
 
-void wsSend(ws_on_send_callback_f callback) {
-
-    constexpr const size_t WS_SEND_JSON_BUFFER_MAX = 1024;
-
-    if (_ws.count() > 0) {
-        DynamicJsonDocument doc(WS_SEND_JSON_BUFFER_MAX);
-        JsonObject root = doc.as<JsonObject>();
-        callback(root);
-        wsSend(root);
-    }
-
-}
-
-void wsSend(const char * payload) {
+void wsSendText(const char * payload) {
     if (_ws.count() > 0) {
         _ws.textAll(payload);
     }
@@ -532,6 +580,7 @@ void wsSend_P(PGM_P payload) {
     }
 }
 
+/*
 void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
     AsyncWebSocketClient* client = _ws.client(client_id);
     if (client == nullptr) return;
@@ -549,6 +598,7 @@ void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
         client->text(buffer);
     }
 }
+*/
 
 void wsSend(uint32_t client_id, const char * payload) {
     _ws.text(client_id, payload);

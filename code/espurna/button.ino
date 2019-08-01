@@ -40,6 +40,12 @@ bool _buttonWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "btn", 3) == 0);
 }
 
+void _buttonWebSocketOnSend(uint32_t client_id) {
+    StaticJsonDocument<JSON_OBJECT_SIZE(1) + 2> root;
+    root["btnDelay"] = getSetting("btnDelay", BUTTON_DBLCLICK_DELAY).toInt();
+    wsSend(client_id, root);
+}
+
 #endif
 
 int buttonFromRelay(unsigned int relayID) {
@@ -243,6 +249,7 @@ void buttonSetup() {
 
     // Websocket Callbacks
     #if WEB_SUPPORT
+        wsOnSendRegister(_buttonWebSocketOnSend);
         wsKeyCheckRegister(_buttonWebSocketKeyCheck);
     #endif
 

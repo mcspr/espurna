@@ -35,10 +35,15 @@ bool _telnetWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "telnet", 6) == 0);
 }
 
-void _telnetWebSocketOnSend(JsonObject& root) {
+void _telnetWebSocketOnSend(uint32_t client_id) {
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(3) + 6;
+    StaticJsonDocument<DOC_SIZE> root;
+
     root["telnetVisible"] = 1;
     root["telnetSTA"] = getSetting("telnetSTA", TELNET_STA).toInt() == 1;
     root["telnetAuth"] = getSetting("telnetAuth", TELNET_AUTHENTICATION).toInt() == 1;
+
+    wsSend(client_id, root);
 }
 
 #endif

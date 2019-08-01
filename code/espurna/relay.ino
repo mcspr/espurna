@@ -203,7 +203,7 @@ void _relayProcess(bool mode) {
             _relaySaveTicker.once_ms(RELAY_SAVE_DELAY, relaySave, save_eeprom);
 
             #if WEB_SUPPORT
-                wsSend(_relayWebSocketUpdate);
+                _relayWebSocketUpdate(0);
             #endif
 
         }
@@ -598,11 +598,17 @@ bool _relayWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "relay", 5) == 0);
 }
 
-void _relayWebSocketUpdate(JsonObject& root) {
+void _relayWebSocketUpdate(uint32_t client_id) {
+    const size_t DOC_SIZE = JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(relayCount()) + (relayCount() * 2);
+    DynamicJsonDocument root(DOC_SIZE);
+
     JsonArray relay = root.createNestedArray("relayStatus");
     for (unsigned char i=0; i<relayCount(); i++) {
         relay.add<uint8_t>(_relays[i].target_status);
     }
+
+    Serial.printf("relayupdate: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+    wsSend(client_id, root);
 }
 
 String _relayFriendlyName(unsigned char i) {
@@ -634,10 +640,18 @@ String _relayFriendlyName(unsigned char i) {
     return res;
 }
 
-void _relayWebSocketSendRelays() {
-    DynamicJsonDocument doc(1024);
+void _relayWebSocketSendRelays(uint32_t client_id) {
 
-    JsonObject root = doc.as<JsonObject>();
+    // 1 root object, 9 per-relay arrays and 2 state ints
+    // N description strings
+    const size_t DOC_SIZE = 
+        (JSON_OBJECT_SIZE(9) * JSON_ARRAY_SIZE(relayCount()))
+        + (6 * relayCount())
+        + (7 * (2 * relayCount()))
+        + JSON_OBJECT_SIZE(3)
+        + 2;
+    DynamicJsonDocument root(DOC_SIZE);
+
     JsonObject relays = root.createNestedObject("relayConfig");
 
     relays["size"] = relayCount();
@@ -673,26 +687,33 @@ void _relayWebSocketSendRelays() {
         #endif
     }
 
-    wsSend(root);
+    Serial.printf("relaysend: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+
+    wsSend(client_id, root);
 }
 
-void _relayWebSocketOnStart(JsonObject& root) {
+void _relayWebSocketOnStart(uint32_t client_id) {
 
     if (relayCount() == 0) return;
 
     // Per-relay configuration
-    _relayWebSocketSendRelays();
+    _relayWebSocketSendRelays(client_id);
 
     // Statuses
-    _relayWebSocketUpdate(root);
+    _relayWebSocketUpdate(client_id);
 
     // Options
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(3) + 6;
+    StaticJsonDocument<DOC_SIZE> root;
+
     if (relayCount() > 1) {
         root["multirelayVisible"] = 1;
         root["relaySync"] = getSetting("relaySync", RELAY_SYNC);
     }
 
     root["relayVisible"] = 1;
+
+    wsSend(client_id, root);
 
 }
 
@@ -706,7 +727,7 @@ void _relayWebSocketOnAction(uint32_t client_id, const char * action, JsonObject
 
         if (value == 3) {
 
-            wsSend(_relayWebSocketUpdate);
+            _relayWebSocketUpdate(client_id);
 
         } else if (value < 3) {
 

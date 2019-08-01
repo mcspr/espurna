@@ -346,25 +346,45 @@ bool _mqttWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "mqtt", 3) == 0);
 }
 
-void _mqttWebSocketOnSend(JsonObject& root) {
+void _mqttWebSocketOnSend(uint32_t client_id) {
+
+    const String server = getSetting("mqttServer", MQTT_SERVER);
+    const String port = getSetting("mqttPort", MQTT_PORT);
+    const String user = getSetting("mqttUser", MQTT_USER);
+    const String clientID = getSetting("mqttClientID");
+    const String password = getSetting("mqttPassword", MQTT_PASS);
+    const String topic = getSetting("mqttTopic", MQTT_TOPIC);
+
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(16) + (9 * 2);
+    StaticJsonDocument<DOC_SIZE> root;
+
     root["mqttVisible"] = 1;
     root["mqttStatus"] = mqttConnected();
+
     root["mqttEnabled"] = mqttEnabled();
-    root["mqttServer"] = getSetting("mqttServer", MQTT_SERVER);
-    root["mqttPort"] = getSetting("mqttPort", MQTT_PORT);
-    root["mqttUser"] = getSetting("mqttUser", MQTT_USER);
-    root["mqttClientID"] = getSetting("mqttClientID");
-    root["mqttPassword"] = getSetting("mqttPassword", MQTT_PASS);
+    root["mqttServer"] = server.c_str();
+    root["mqttPort"] = port.c_str();
+    root["mqttUser"] = user.c_str();
+    root["mqttClientID"] = clientID.c_str();
+    root["mqttPassword"] = password.c_str();
+
     root["mqttKeep"] = _mqtt_keepalive;
     root["mqttRetain"] = _mqtt_retain;
     root["mqttQoS"] = _mqtt_qos;
+
     #if ASYNC_TCP_SSL_ENABLED
         root["mqttsslVisible"] = 1;
         root["mqttUseSSL"] = getSetting("mqttUseSSL", MQTT_SSL_ENABLED).toInt() == 1;
         root["mqttFP"] = getSetting("mqttFP", MQTT_SSL_FINGERPRINT);
     #endif
-    root["mqttTopic"] = getSetting("mqttTopic", MQTT_TOPIC);
+
+    root["mqttTopic"] = topic.c_str();
     root["mqttUseJson"] = getSetting("mqttUseJson", MQTT_USE_JSON).toInt() == 1;
+
+    Serial.printf("mqttsend: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+
+    wsSend(client_id, root);
+
 }
 
 #endif

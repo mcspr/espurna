@@ -27,10 +27,19 @@ bool _alexaWebSocketKeyCheck(const char* key) {
     return (strncmp(key, "alexa", 5) == 0);
 }
 
-void _alexaWebSocketOnSend(JsonObject& root) {
+void _alexaWebSocketOnSend(uint32_t client_id) {
+
+    const String name = getSetting("alexaName");
+
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(3) + (2 * 2);
+    StaticJsonDocument<DOC_SIZE> root;
+
     root["alexaVisible"] = 1;
     root["alexaEnabled"] = alexaEnabled();
-    root["alexaName"] = getSetting("alexaName");
+    root["alexaName"] = name.c_str();
+
+    Serial.printf("alexasend: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+    wsSend(client_id, root);
 }
 
 void _alexaConfigure() {

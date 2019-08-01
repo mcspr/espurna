@@ -75,15 +75,30 @@ bool _ledWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "led", 3) == 0);
 }
 
-void _ledWebSocketOnSend(JsonObject& root) {
+void _ledWebSocketOnSend(uint32_t client_id) {
     if (_ledCount() == 0) return;
+
+    const size_t DOC_SIZE =
+        JSON_ARRAY_SIZE(_ledCount())
+        + JSON_OBJECT_SIZE(4)
+        + (4 * _ledCount());
+        + 2;
+    DynamicJsonDocument root(DOC_SIZE);
+
     root["ledVisible"] = 1;
-    JsonArray leds = root.createNestedArray("ledConfig");
-    for (byte i=0; i<_ledCount(); i++) {
-        JsonObject led = leds.createNestedObject();
-        led["mode"] = getSetting("ledMode", i, "").toInt();
-        led["relay"] = getSetting("ledRelay", i, "").toInt();
+
+    JsonObject leds = root.createNestedObject("ledConfig");
+    JsonArray modes = leds.createNestedArray("mode");
+    JsonArray relays = leds.createNestedArray("relay");
+
+    for (unsigned char id=0; id<_ledCount(); ++id) {
+        modes.add(getSetting("ledMode", id, "").toInt());
+        relays.add(getSetting("ledRelay", id, "").toInt());
     }
+
+    Serial.printf("ledsend: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+
+    wsSend(client_id, root);
 }
 
 #endif

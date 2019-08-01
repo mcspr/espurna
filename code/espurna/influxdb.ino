@@ -21,14 +21,25 @@ bool _idbWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "idb", 3) == 0);
 }
 
-void _idbWebSocketOnSend(JsonObject& root) {
+void _idbWebSocketOnSend(uint32_t client_id) {
+    const String host = getSetting("idbHost", INFLUXDB_HOST);
+    const String port = getSetting("idbPort", INFLUXDB_PORT).toInt();
+    const String database = getSetting("idbDatabase", INFLUXDB_DATABASE);
+    const String username = getSetting("idbUsername", INFLUXDB_USERNAME);
+    const String password = getSetting("idbPassword", INFLUXDB_PASSWORD);
+
+    StaticJsonDocument<JSON_OBJECT_SIZE(7) + 2> root;
+
     root["idbVisible"] = 1;
     root["idbEnabled"] = getSetting("idbEnabled", INFLUXDB_ENABLED).toInt() == 1;
-    root["idbHost"] = getSetting("idbHost", INFLUXDB_HOST);
-    root["idbPort"] = getSetting("idbPort", INFLUXDB_PORT).toInt();
-    root["idbDatabase"] = getSetting("idbDatabase", INFLUXDB_DATABASE);
-    root["idbUsername"] = getSetting("idbUsername", INFLUXDB_USERNAME);
-    root["idbPassword"] = getSetting("idbPassword", INFLUXDB_PASSWORD);
+
+    root["idbHost"] = host.c_str();
+    root["idbPort"] = port.c_str();
+    root["idbDatabase"] = database.c_str();
+    root["idbUsername"] = username.c_str();
+    root["idbPassword"] = password.c_str();
+
+    wsSend(client_id, root);
 }
 
 void _idbConfigure() {

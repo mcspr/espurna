@@ -173,12 +173,26 @@ bool _domoticzWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "dcz", 3) == 0);
 }
 
-void _domoticzWebSocketOnSend(JsonObject& root) {
+void _domoticzWebSocketOnSend(uint32_t client_id) {
+
+    const String topic_in = getSetting("dczTopicIn", DOMOTICZ_IN_TOPIC);
+    const String topic_out = getSetting("dczTopicOut", DOMOTICZ_OUT_TOPIC);
+
+    // TODO: re-do websocketmagntiudes generator as separate callback?
+    #if SENSOR_SUPPORT
+        constexpr const size_t DOC_SIZE = 1024;
+    #else
+        const size_t DOC_SIZE =
+            JSON_OBJECT_SIZE(5)
+            + JSON_ARRAY_SIZE(relayCount());
+    #endif
+    DynamicJsonDocument root(DOC_SIZE);
 
     unsigned char visible = 0;
     root["dczEnabled"] = getSetting("dczEnabled", DOMOTICZ_ENABLED).toInt() == 1;
-    root["dczTopicIn"] = getSetting("dczTopicIn", DOMOTICZ_IN_TOPIC);
-    root["dczTopicOut"] = getSetting("dczTopicOut", DOMOTICZ_OUT_TOPIC);
+
+    root["dczTopicIn"] = topic_in.c_str();
+    root["dczTopicOut"] = topic_out.c_str();
 
     JsonArray relays = root.createNestedArray("dczRelays");
     for (unsigned char i=0; i<relayCount(); i++) {
@@ -192,6 +206,8 @@ void _domoticzWebSocketOnSend(JsonObject& root) {
     #endif
 
     root["dczVisible"] = visible;
+
+    wsSend(client_id, root);
 
 }
 

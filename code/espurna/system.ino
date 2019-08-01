@@ -168,6 +168,16 @@ void _systemSetupHeartbeat() {
         if (strncmp(key, "hb", 2) == 0) return true;
         return false;
     }
+
+    void _systemWebSocketOnSend(uint32_t client_id) {
+        constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(2) + 4;
+        StaticJsonDocument<DOC_SIZE> root;
+
+        root["hbMode"] = getSetting("hbMode", HEARTBEAT_MODE).toInt();
+        root["hbInterval"] = getSetting("hbInterval", HEARTBEAT_INTERVAL).toInt();
+
+        wsSend(client_id, root);
+    }
 #endif
 
 void systemLoop() {
@@ -261,6 +271,7 @@ void systemSetup() {
     #endif
 
     #if WEB_SUPPORT
+        wsOnSendRegister(_systemWebSocketOnSend);
         wsKeyCheckRegister(_systemWebSocketKeyCheck);
     #endif
 

@@ -272,6 +272,14 @@ void terminalSetup() {
 
     _terminalInitCommand();
 
+    #if WEB_SUPPORT
+        wsOnSendRegister([](uint32_t client_id) {
+            StaticJsonDocument<JSON_OBJECT_SIZE(1) + 2> root;
+            root["cmdVisible"] = 1;
+            wsSend(client_id, root);
+        });
+    #endif
+
     #if SERIAL_RX_ENABLED
         SERIAL_RX_PORT.begin(SERIAL_RX_BAUDRATE);
     #endif // SERIAL_RX_ENABLED

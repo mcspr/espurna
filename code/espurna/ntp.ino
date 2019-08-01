@@ -30,13 +30,22 @@ bool _ntpWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "ntp", 3) == 0);
 }
 
-void _ntpWebSocketOnSend(JsonObject& root) {
+void _ntpWebSocketOnSend(uint32_t client_id) {
+    const String server = getSetting("ntpServer", NTP_SERVER);
+
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(6) + (2 * 5);
+    StaticJsonDocument<DOC_SIZE> root;
+
     root["ntpVisible"] = 1;
     root["ntpStatus"] = (timeStatus() == timeSet);
-    root["ntpServer"] = getSetting("ntpServer", NTP_SERVER);
+    root["ntpServer"] = server.c_str();
     root["ntpOffset"] = getSetting("ntpOffset", NTP_TIME_OFFSET).toInt();
     root["ntpDST"] = getSetting("ntpDST", NTP_DAY_LIGHT).toInt() == 1;
     root["ntpRegion"] = getSetting("ntpRegion", NTP_DST_REGION).toInt();
+
+    Serial.printf("ntpsend: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+
+    wsSend(client_id, root);
 }
 
 #endif
@@ -117,7 +126,7 @@ void _ntpReport() {
     _ntp_report = false;
 
     #if WEB_SUPPORT
-        wsSend(_ntpWebSocketOnSend);
+        _ntpWebSocketOnSend(0);
     #endif
 
     if (ntpSynced()) {

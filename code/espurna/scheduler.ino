@@ -19,9 +19,12 @@ bool _schWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "sch", 3) == 0);
 }
 
-void _schWebSocketOnSend(JsonObject &root){
+void _schWebSocketOnSend(uint32_t client_id){
 
     if (!relayCount()) return;
+
+    const size_t DOC_SIZE = JSON_OBJECT_SIZE(9) + (JSON_ARRAY_SIZE(relayCount()) * 8);
+    DynamicJsonDocument root(DOC_SIZE);
 
     root["schVisible"] = 1;
     root["maxSchedules"] = SCHEDULER_MAX_SCHEDULES;
@@ -56,6 +59,9 @@ void _schWebSocketOnSend(JsonObject &root){
     schedules["size"] = size;
     schedules["start"] = 0;
 
+    Serial.printf("schsend: usage=%u estimate=%u\n", root.memoryUsage(), DOC_SIZE);
+
+    wsSend(client_id, root);
 }
 
 #endif // WEB_SUPPORT

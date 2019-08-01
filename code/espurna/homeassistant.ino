@@ -290,10 +290,15 @@ bool _haWebSocketKeyCheck(const char * key) {
     return (strncmp(key, "ha", 2) == 0);
 }
 
-void _haWebSocketOnSend(JsonObject& root) {
+void _haWebSocketOnSend(uint32_t client_id) {
+    const String prefix = getSetting("haPrefix", HOMEASSISTANT_PREFIX);
+
+    StaticJsonDocument<JSON_OBJECT_SIZE(3) + 2> root;
     root["haVisible"] = 1;
-    root["haPrefix"] = getSetting("haPrefix", HOMEASSISTANT_PREFIX);
+    root["haPrefix"] = prefix.c_str();
     root["haEnabled"] = getSetting("haEnabled", HOMEASSISTANT_ENABLED).toInt() == 1;
+
+    wsSend(client_id, root);
 }
 
 void _haWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& data) {
@@ -320,7 +325,7 @@ void _haInitCommands() {
         setSetting("haEnabled", "1");
         _haConfigure();
         #if WEB_SUPPORT
-            wsSend(_haWebSocketOnSend);
+            _haWebSocketOnSend(0);
         #endif
         terminalOK();
     });
@@ -329,7 +334,7 @@ void _haInitCommands() {
         setSetting("haEnabled", "0");
         _haConfigure();
         #if WEB_SUPPORT
-            wsSend(_haWebSocketOnSend);
+            _haWebSocketOnSend(0);
         #endif
         terminalOK();
     });

@@ -26,12 +26,22 @@ bool _apiWebSocketKeyCheck(const char* key) {
     return (strncmp(key, "api", 3) == 0);
 }
 
-void _apiWebSocketOnSend(JsonObject& root) {
+void _apiWebSocketOnSend(uint32_t client_id) {
+
+    const String api_key = getSetting("apiKey");
+
+    // 5 keys, 4 ints, ? char string
+    constexpr const size_t DOC_SIZE = JSON_OBJECT_SIZE(5) + 8;
+    StaticJsonDocument<DOC_SIZE> root;
+
     root["apiVisible"] = 1;
     root["apiEnabled"] = getSetting("apiEnabled", API_ENABLED).toInt() == 1;
-    root["apiKey"] = getSetting("apiKey");
     root["apiRealTime"] = getSetting("apiRealTime", API_REAL_TIME_VALUES).toInt() == 1;
     root["apiRestFul"] = getSetting("apiRestFul", API_RESTFUL).toInt() == 1;
+
+    root["apiKey"] = api_key.c_str();
+
+    wsSend(client_id, root);
 }
 
 void _apiConfigure() {
