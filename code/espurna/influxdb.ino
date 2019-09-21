@@ -8,12 +8,11 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if INFLUXDB_SUPPORT
 
-#include "ESPAsyncTCP.h"
-
-#include "libs/SyncClientWrap.h"
+#include <ESPAsyncTCP.h>
+#include <SyncClient.h>
 
 bool _idb_enabled = false;
-SyncClientWrap * _idb_client;
+std::unique_ptr<SyncClient> _idb_client = nullptr;
 
 // -----------------------------------------------------------------------------
 
@@ -116,7 +115,7 @@ bool idbEnabled() {
 
 void idbSetup() {
 
-    _idb_client = new SyncClientWrap();
+    _idb_client = std::make_unique<SyncClient>();
 
     _idbConfigure();
 
