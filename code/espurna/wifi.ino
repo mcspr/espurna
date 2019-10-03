@@ -720,6 +720,44 @@ void wifiRegister(wifi_callback_f callback) {
 // INITIALIZATION
 // -----------------------------------------------------------------------------
 
+String _wifiDisconnectReasonAsString(WiFiDisconnectReason reason) {
+    switch (reason) {
+        case WIFI_DISCONNECT_REASON_AUTH_EXPIRE: return F("AUTH_EXPIRE");
+        case WIFI_DISCONNECT_REASON_AUTH_LEAVE: return F("AUTH_LEAVE");
+        case WIFI_DISCONNECT_REASON_ASSOC_EXPIRE: return F("ASSOC_EXPIRE");
+        case WIFI_DISCONNECT_REASON_ASSOC_TOOMANY: return F("ASSOC_TOOMANY");
+        case WIFI_DISCONNECT_REASON_NOT_AUTHED: return F("NOT_AUTHED");
+        case WIFI_DISCONNECT_REASON_NOT_ASSOCED: return F("NOT_ASSOCED");
+        case WIFI_DISCONNECT_REASON_ASSOC_LEAVE: return F("ASSOC_LEAVE");
+        case WIFI_DISCONNECT_REASON_ASSOC_NOT_AUTHED: return F("ASSOC_NOT_AUTHED");
+        case WIFI_DISCONNECT_REASON_DISASSOC_PWRCAP_BAD: return F("DISASSOC_PWRCAP_BAD");
+        case WIFI_DISCONNECT_REASON_DISASSOC_SUPCHAN_BAD: return F("DISASSOC_SUPCHAN_BAD");
+        case WIFI_DISCONNECT_REASON_IE_INVALID: return F("IE_INVALID");
+        case WIFI_DISCONNECT_REASON_MIC_FAILURE: return F("MIC_FAILURE");
+        case WIFI_DISCONNECT_REASON_4WAY_HANDSHAKE_TIMEOUT: return F("4WAY_HANDSHAKE_TIMEOUT");
+        case WIFI_DISCONNECT_REASON_GROUP_KEY_UPDATE_TIMEOUT: return F("GROUP_KEY_UPDATE_TIMEOUT");
+        case WIFI_DISCONNECT_REASON_IE_IN_4WAY_DIFFERS: return F("IE_IN_4WAY_DIFFERS");
+        case WIFI_DISCONNECT_REASON_GROUP_CIPHER_INVALID: return F("GROUP_CIPHER_INVALID");
+        case WIFI_DISCONNECT_REASON_PAIRWISE_CIPHER_INVALID: return F("PAIRWISE_CIPHER_INVALID");
+        case WIFI_DISCONNECT_REASON_AKMP_INVALID: return F("AKMP_INVALID");
+        case WIFI_DISCONNECT_REASON_UNSUPP_RSN_IE_VERSION: return F("UNSUPP_RSN_IE_VERSION");
+        case WIFI_DISCONNECT_REASON_INVALID_RSN_IE_CAP: return F("INVALID_RSN_IE_CAP");
+        case WIFI_DISCONNECT_REASON_802_1X_AUTH_FAILED: return F("802_1X_AUTH_FAILED");
+        case WIFI_DISCONNECT_REASON_CIPHER_SUITE_REJECTED: return F("CIPHER_SUITE_REJECTED");
+        case WIFI_DISCONNECT_REASON_BEACON_TIMEOUT: return F("BEACON_TIMEOUT");
+        case WIFI_DISCONNECT_REASON_NO_AP_FOUND: return F("NO_AP_FOUND");
+        case WIFI_DISCONNECT_REASON_AUTH_FAIL: return F("AUTH_FAIL");
+        case WIFI_DISCONNECT_REASON_ASSOC_FAIL: return F("ASSOC_FAIL");
+        case WIFI_DISCONNECT_REASON_HANDSHAKE_TIMEOUT: return F("HANDSHAKE_TIMEOUT");
+        case WIFI_DISCONNECT_REASON_UNSPECIFIED:
+        default:
+            return F("WIFI_DISCONNECT_REASON_UNSPECIFIED");
+    }
+}
+
+WiFiEventHandler _wifiEventSTA_Disconnected;
+WiFiEventHandler _wifiEventGotIP;
+
 void wifiSetup() {
 
     _wifiInject();
@@ -752,6 +790,14 @@ void wifiSetup() {
     // Main callbacks
     espurnaRegisterLoop(wifiLoop);
     espurnaRegisterReload(_wifiConfigure);
+
+    _wifiEventSTA_Disconnected = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected& event) {
+        DEBUG_MSG_P(PSTR("[WIFI] reason=%s (%d)\n"), _wifiDisconnectReasonAsString(event.reason).c_str(), event.reason);
+    });
+
+    _wifiEventGotIP = WiFi.onWiFiModeChange([](const WiFiEventModeChange& event) {
+        DEBUG_MSG_P(PSTR("[WIFI] mode change %d -> %d\n"), event.oldMode, event.newMode);
+    });
 
 }
 
