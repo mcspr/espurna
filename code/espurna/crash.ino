@@ -48,7 +48,7 @@ extern "C" {
 
 #define SAVE_CRASH_STACK_TRACE_MAX  0x80  // limit at 128 bytes (increment/decrement by 16)
 
-uint16_t _save_crash_stack_trace_max = SAVE_CRASH_STACK_TRACE_MAX;
+int _save_crash_stack_trace_max = SAVE_CRASH_STACK_TRACE_MAX;
 bool _save_crash_enabled = true;
 
 /**
@@ -87,7 +87,7 @@ extern "C" void custom_crash_callback(struct rst_info * rst_info, uint32_t stack
     // EEPROM size is limited, write as little as possible.
     // we sometimes want to avoid big stack traces, e.g. if stack_end == 0x3fffffb0, we are in SYS context.
     // but still should get enough relevant info and it is possible to set needed size at build/runtime
-    const uint16_t stack_size = constrain((stack_end - stack_start), 0, _save_crash_stack_trace_max);
+    const uint16_t stack_size = constrain((stack_end - stack_start), 0, static_cast<uint16_t>(_save_crash_stack_trace_max));
     EEPROMr.put(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_STACK_START, stack_start);
     EEPROMr.put(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_STACK_END, stack_end);
     EEPROMr.put(SAVE_CRASH_EEPROM_OFFSET + SAVE_CRASH_STACK_SIZE, stack_size);
@@ -189,9 +189,10 @@ void crashSetup() {
 
     // Minumum of 16 and align for column formatter in crashDump()
     // Maximum of flash sector size minus reserved space at the beginning
-    const uint16_t trace_max = constrain(
-        ((getSetting("sysTraceMax", SAVE_CRASH_STACK_TRACE_MAX).toInt() + 15) & -16),
-        0, (SPI_FLASH_SEC_SIZE - crashUsedSpace())
+    static_assert(SPI_FLASH_SEC_SIZE > crashUsedSpace(), "crash handler used space exceedes flash sector size!");
+    const int trace_max = constrain(
+        (abs(getSetting("sysTraceMax", SAVE_CRASH_STACK_TRACE_MAX).toInt()) + 15) & -16,
+        0, static_cast<int>(SPI_FLASH_SEC_SIZE - crashUsedSpace())
     );
 
     if (trace_max != _save_crash_stack_trace_max) {
