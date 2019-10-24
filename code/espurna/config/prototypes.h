@@ -154,10 +154,11 @@ bool gpioReleaseLock(unsigned char gpio);
 // -----------------------------------------------------------------------------
 // Homeassistant
 // -----------------------------------------------------------------------------
+#include <map>
 struct ha_config_t;
-struct ha_sensor_t;
-struct ha_switch_t;
 void haSetup();
+
+using ha_container_t = std::map<String, String>;
 
 // -----------------------------------------------------------------------------
 // I2C
