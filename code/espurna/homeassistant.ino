@@ -10,6 +10,40 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #include <ArduinoJson.h>
 
+#if SENSOR_SUPPORT
+    struct ha_sensor_t {
+        String uniq_id;
+        String name;
+        String state_topic;
+        String unit;
+    };
+#endif
+
+struct ha_switch_t {
+    String name;
+    String uniq_id;
+    String state_topic;
+    String command_topic;
+    String payload_on;
+    String payload_off;
+    String availability_topic;
+    String payload_available;
+    String payload_not_available;
+
+    #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+        String brightness_state_topic;
+        String brightness_command_topic;
+
+        String rgb_state_topic;
+        String rgb_command_topic;
+        String color_temp_command_topic;
+        String color_temp_state_topic;
+
+        String white_value_state_topic;
+        String white_value_command_topic;
+    #endif // LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+};
+
 bool _haEnabled = false;
 bool _haSendFlag = false;
 
@@ -71,6 +105,20 @@ struct ha_config_t {
         deviceConfig["model"] = DEVICE;
     }
 
+    JsonObject& get(const char* key) {
+        if (!root.containsKey(key)) {
+            return root.createNestedObject(key);
+        }
+
+        return root[key];
+    }
+
+    #if SENSOR_SUPPORT
+        const ha_sensor_t& loadMagnitude(unsigned char id);
+    #endif // SENSOR_SUPPORT
+
+    const ha_switch_t& loadSwitch(unsigned char id);
+
     ha_config_t() : ha_config_t(DEFAULT_BUFFER_SIZE) {}
 
     size_t size() { return jsonBuffer.size(); }
@@ -79,11 +127,65 @@ struct ha_config_t {
     JsonObject& deviceConfig;
     JsonObject& root;
 
+    ha_switch_t switch_buffer;
+    #if SENSOR_SUPPORT
+        ha_sensor_t sensor_buffer;
+    #endif
+
     const String identifier;
     const String name;
     const String version;
 };
 
+const ha_switch_t& ha_config_t::loadSwitch(unsigned char i) {
+
+    switch_buffer.uniq_id = getIdentifier() + "_" + switchType + "_" + String(i);
+
+    String name = getSetting("hostname");
+    if (relayCount() > 1) {
+        name += String("_") + String(i);
+    }
+
+    switch_buffer.name = _haFixName(name);
+
+    if (relayCount()) {
+        switch_buffer.state_topic = mqttTopic(MQTT_TOPIC_RELAY, i, false);
+        switch_buffer.command_topic = mqttTopic(MQTT_TOPIC_RELAY, i, true);
+        switch_buffer.payload_on = relayPayload(RelayStatus::ON);
+        switch_buffer.payload_off = relayPayload(RelayStatus::OFF);
+        switch_buffer.availability_topic = mqttTopic(MQTT_TOPIC_STATUS, false);
+        switch_buffer.payload_available = mqttPayloadStatus(true);
+        switch_buffer.payload_not_available = mqttPayloadStatus(false);
+    }
+
+    #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+
+        if (i == 0) {
+
+            switch_buffer.brightness_state_topic = mqttTopic(MQTT_TOPIC_BRIGHTNESS, false);
+            switch_buffer.brightness_command_topic = mqttTopic(MQTT_TOPIC_BRIGHTNESS, true);
+
+            if (lightHasColor()) {
+                switch_buffer.rgb_state_topic = mqttTopic(MQTT_TOPIC_COLOR_RGB, false);
+                switch_buffer.rgb_command_topic = mqttTopic(MQTT_TOPIC_COLOR_RGB, true);
+            }
+            if (lightUseCCT()) {
+                switch_buffer.color_temp_command_topic = mqttTopic(MQTT_TOPIC_MIRED, true);
+                switch_buffer.color_temp_state_topic = mqttTopic(MQTT_TOPIC_MIRED, false);
+            }
+
+            if (lightChannels() > 3) {
+                switch_buffer.white_value_state_topic = mqttTopic(MQTT_TOPIC_CHANNEL, 3, false);
+                switch_buffer.white_value_command_topic = mqttTopic(MQTT_TOPIC_CHANNEL, 3, true);
+            }
+
+        }
+
+    #endif // LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+
+    return switch_buffer;
+
+}
 
 // -----------------------------------------------------------------------------
 // SENSORS
@@ -91,12 +193,19 @@ struct ha_config_t {
 
 #if SENSOR_SUPPORT
 
-void _haSendMagnitude(unsigned char i, JsonObject& config) {
+const ha_sensor_t& ha_config_t::loadMagnitude(unsigned char id) {
+    unsigned char type = magnitudeType(id);
+    sensor_buffer.uniq_id = getIdentifier() + "_" + magnitudeTopic(magnitudeType(id)) + "_" + String(id);
+    sensor_buffer.name = _haFixName(getSetting("hostname") + String(" ") + magnitudeTopic(type));
+    sensor_buffer.state_topic = mqttTopic(magnitudeTopicIndex(id).c_str(), false);
+    sensor_buffer.unit = magnitudeUnits(type);
+    return sensor_buffer;
+}
 
-    unsigned char type = magnitudeType(i);
-    config["name"] = _haFixName(getSetting("hostname") + String(" ") + magnitudeTopic(type));
-    config["state_topic"] = mqttTopic(magnitudeTopicIndex(i).c_str(), false);
-    config["unit_of_measurement"] = magnitudeUnits(type);
+void _haSendMagnitude(const ha_sensor_t& sensor, JsonObject& config) {
+    config["name"] = sensor.name.c_str();
+    config["state_topic"] = sensor.state_topic.c_str();
+    config["unit_of_measurement"] = sensor.unit.c_str();
 }
 
 void _haSendMagnitudes(ha_config_t& config) {
@@ -110,12 +219,13 @@ void _haSendMagnitudes(ha_config_t& config) {
 
         String output;
         if (_haEnabled) {
-            _haSendMagnitude(i, config.root);
-            config.root["uniq_id"] = getIdentifier() + "_" + magnitudeTopic(magnitudeType(i)) + "_" + String(i);
-            config.root["device"] = config.deviceConfig;
+            JsonObject& root = config.get("sensor");
+            _haSendMagnitude(config.loadMagnitude(i), root);
+            root["uniq_id"] = config.sensor_buffer.uniq_id.c_str();
+            root["device"] = config.deviceConfig;
             
-            output.reserve(config.root.measureLength());
-            config.root.printTo(output);
+            output.reserve(root.measureLength());
+            root.printTo(output);
         }
 
         mqttSendRaw(topic.c_str(), output.c_str());
@@ -132,50 +242,40 @@ void _haSendMagnitudes(ha_config_t& config) {
 // SWITCHES & LIGHTS
 // -----------------------------------------------------------------------------
 
-void _haSendSwitch(unsigned char i, JsonObject& config) {
+void _haSendSwitch(const ha_switch_t& switch_, JsonObject& config) {
 
-    String name = getSetting("hostname");
-    if (relayCount() > 1) {
-        name += String("_") + String(i);
-    }
-
-    config.set("name", _haFixName(name));
-
-    if (relayCount()) {
-        config["state_topic"] = mqttTopic(MQTT_TOPIC_RELAY, i, false);
-        config["command_topic"] = mqttTopic(MQTT_TOPIC_RELAY, i, true);
-        config["payload_on"] = relayPayload(RelayStatus::ON);
-        config["payload_off"] = relayPayload(RelayStatus::OFF);
-        config["availability_topic"] = mqttTopic(MQTT_TOPIC_STATUS, false);
-        config["payload_available"] = mqttPayloadStatus(true);
-        config["payload_not_available"] = mqttPayloadStatus(false);
-    }
+    config["state_topic"] = switch_.state_topic.c_str();
+    config["command_topic"] = switch_.command_topic.c_str();
+    config["payload_on"] = switch_.payload_on.c_str();
+    config["payload_off"] = switch_.payload_off.c_str();
+    config["availability_topic"] = switch_.availability_topic.c_str();
+    config["payload_available"] = switch_.payload_available.c_str();
+    config["payload_not_available"] = switch_.payload_not_available.c_str();
 
     #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 
-        if (i == 0) {
+        if (switch_.brightness_state_topic.length()) {
 
-            config["brightness_state_topic"] = mqttTopic(MQTT_TOPIC_BRIGHTNESS, false);
-            config["brightness_command_topic"] = mqttTopic(MQTT_TOPIC_BRIGHTNESS, true);
+            config["brightness_state_topic"] = switch_.brightness_state_topic.c_str();
+            config["brightness_command_topic"] = switch_.brightness_command_topic.c_str();
 
             if (lightHasColor()) {
-                config["rgb_state_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, false);
-                config["rgb_command_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, true);
+                config["rgb_state_topic"] = switch_.rgb_state_topic.c_str();
+                config["rgb_command_topic"] = switch_.rgb_command_topic.c_str();
             }
             if (lightUseCCT()) {
-                config["color_temp_command_topic"] = mqttTopic(MQTT_TOPIC_MIRED, true);
-                config["color_temp_state_topic"] = mqttTopic(MQTT_TOPIC_MIRED, false);
+                config["color_temp_command_topic"] = switch_.color_temp_command_topic.c_str();
+                config["color_temp_state_topic"] = switch_.color_temp_state_topic.c_str();
             }
 
             if (lightChannels() > 3) {
-                config["white_value_state_topic"] = mqttTopic(MQTT_TOPIC_CHANNEL, 3, false);
-                config["white_value_command_topic"] = mqttTopic(MQTT_TOPIC_CHANNEL, 3, true);
+                config["white_value_state_topic"] = switch_.white_value_state_topic.c_str();
+                config["white_value_command_topic"] = switch_.white_value_command_topic.c_str();
             }
 
         }
 
     #endif // LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
-
 }
 
 void _haSendSwitches(ha_config_t& config) {
@@ -189,12 +289,14 @@ void _haSendSwitches(ha_config_t& config) {
 
         String output;
         if (_haEnabled) {
-            _haSendSwitch(i, config.root);
-            config.root["uniq_id"] = getIdentifier() + "_" + switchType + "_" + String(i);
-            config.root["device"] = config.deviceConfig;
+            JsonObject& root = config.get("switch");
 
-            output.reserve(config.root.measureLength());
-            config.root.printTo(output);
+            _haSendSwitch(config.loadSwitch(i), root);
+            root["uniq_id"] = config.switch_buffer.uniq_id.c_str();
+            root["device"] = config.deviceConfig;
+
+            output.reserve(root.measureLength());
+            root.printTo(output);
         }
 
         mqttSendRaw(topic.c_str(), output.c_str());
@@ -208,14 +310,14 @@ void _haSendSwitches(ha_config_t& config) {
 
 constexpr const size_t HA_YAML_BUFFER_SIZE = 1024;
 
-void _haSwitchYaml(unsigned char index, JsonObject& root) {
+void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
 
     String output;
     output.reserve(HA_YAML_BUFFER_SIZE);
 
-    JsonObject& config = root.createNestedObject("config");
+    JsonObject& config = ha_config->get("switch");
+    _haSendSwitch(ha_config->loadSwitch(index), config);
     config["platform"] = "mqtt";
-    _haSendSwitch(index, config);
 
     if (index == 0) output += "\n\n" + switchType + ":";
     output += "\n";
@@ -239,20 +341,19 @@ void _haSwitchYaml(unsigned char index, JsonObject& root) {
     }
     output += " ";
 
-    root.remove("config");
     root["haConfig"] = output;
 }
 
 #if SENSOR_SUPPORT
 
-void _haSensorYaml(unsigned char index, JsonObject& root) {
+void _haSensorYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
 
     String output;
     output.reserve(HA_YAML_BUFFER_SIZE);
 
-    JsonObject& config = root.createNestedObject("config");
+    JsonObject& config = ha_config->get("sensor");
+    _haSendMagnitude(ha_config->loadMagnitude(index), config);
     config["platform"] = "mqtt";
-    _haSendMagnitude(index, config);
 
     if (index == 0) output += "\n\nsensor:";
     output += "\n";
@@ -274,7 +375,6 @@ void _haSensorYaml(unsigned char index, JsonObject& root) {
     }
     output += " ";
 
-    root.remove("config");
     root["haConfig"] = output;
 
 }
@@ -342,18 +442,21 @@ void _haWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& d
         #else
             callbacks.reserve(relayCount());
         #endif // SENSOR_SUPPORT
+        if (!callbacks.size()) return;
+
+        auto ha_config = std::make_shared<ha_config_t>();
         {
             for (unsigned char idx=0; idx<relayCount(); ++idx) {
-                callbacks.push_back([idx](JsonObject& root) {
-                    _haSwitchYaml(idx, root);
+                callbacks.push_back([idx, ha_config](JsonObject& root) {
+                    _haSwitchYaml(ha_config, idx, root);
                 });
             }
         }
         #if SENSOR_SUPPORT
         {
             for (unsigned char idx=0; idx<magnitudeCount(); ++idx) {
-                callbacks.push_back([idx](JsonObject& root) {
-                    _haSensorYaml(idx, root);
+                callbacks.push_back([idx, ha_config](JsonObject& root) {
+                    _haSensorYaml(ha_config, idx, root);
                 });
             }
         }
@@ -369,17 +472,18 @@ void _haWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& d
 void _haInitCommands() {
 
     terminalRegisterCommand(F("HA.CONFIG"), [](Embedis* e) {
+        auto ha_config = std::make_shared<ha_config_t>();
         for (unsigned char idx=0; idx<relayCount(); ++idx) {
             DynamicJsonBuffer jsonBuffer(1024);
             JsonObject& root = jsonBuffer.createObject();
-            _haSwitchYaml(idx, root);
+            _haSwitchYaml(ha_config, idx, root);
             DEBUG_MSG(root["haConfig"].as<String>().c_str());
         }
         #if SENSOR_SUPPORT
             for (unsigned char idx=0; idx<magnitudeCount(); ++idx) {
                 DynamicJsonBuffer jsonBuffer(1024);
                 JsonObject& root = jsonBuffer.createObject();
-                _haSensorYaml(idx, root);
+                _haSensorYaml(ha_config, idx, root);
                 DEBUG_MSG(root["haConfig"].as<String>().c_str());
             }
         #endif // SENSOR_SUPPORT

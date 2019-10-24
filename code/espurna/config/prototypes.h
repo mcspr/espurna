@@ -155,6 +155,8 @@ bool gpioReleaseLock(unsigned char gpio);
 // Homeassistant
 // -----------------------------------------------------------------------------
 struct ha_config_t;
+struct ha_sensor_t;
+struct ha_switch_t;
 void haSetup();
 
 // -----------------------------------------------------------------------------
