@@ -94,6 +94,10 @@ struct ha_config_t {
         jsonBuffer(size),
         deviceConfig(jsonBuffer.createObject()),
         root(jsonBuffer.createObject()),
+        switch_root(jsonBuffer.createObject()),
+        #if SENSOR_SUPPORT
+            sensor_root(jsonBuffer.createObject()),
+        #endif
         identifier(getIdentifier()),
         name(getSetting("desc", getSetting("hostname"))),
         version(String(APP_NAME " " APP_VERSION " (") + getCoreVersion() + ")")
@@ -105,19 +109,12 @@ struct ha_config_t {
         deviceConfig["model"] = DEVICE;
     }
 
-    JsonObject& get(const char* key) {
-        if (!root.containsKey(key)) {
-            return root.createNestedObject(key);
-        }
 
-        return root[key];
-    }
+    const ha_switch_t& loadSwitch(unsigned char id);
 
     #if SENSOR_SUPPORT
         const ha_sensor_t& loadMagnitude(unsigned char id);
     #endif // SENSOR_SUPPORT
-
-    const ha_switch_t& loadSwitch(unsigned char id);
 
     ha_config_t() : ha_config_t(DEFAULT_BUFFER_SIZE) {}
 
@@ -127,8 +124,11 @@ struct ha_config_t {
     JsonObject& deviceConfig;
     JsonObject& root;
 
+    JsonObject& switch_root;
     ha_switch_t switch_buffer;
+
     #if SENSOR_SUPPORT
+        JsonObject& sensor_root;
         ha_sensor_t sensor_buffer;
     #endif
 
@@ -219,7 +219,7 @@ void _haSendMagnitudes(ha_config_t& config) {
 
         String output;
         if (_haEnabled) {
-            JsonObject& root = config.get("sensor");
+            JsonObject& root = config.sensor_root;
             _haSendMagnitude(config.loadMagnitude(i), root);
             root["uniq_id"] = config.sensor_buffer.uniq_id.c_str();
             root["device"] = config.deviceConfig;
@@ -289,7 +289,7 @@ void _haSendSwitches(ha_config_t& config) {
 
         String output;
         if (_haEnabled) {
-            JsonObject& root = config.get("switch");
+            JsonObject& root = config.switch_root;
 
             _haSendSwitch(config.loadSwitch(i), root);
             root["uniq_id"] = config.switch_buffer.uniq_id.c_str();
@@ -315,7 +315,7 @@ void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, 
     String output;
     output.reserve(HA_YAML_BUFFER_SIZE);
 
-    JsonObject& config = ha_config->get("switch");
+    JsonObject& config = ha_config->switch_root;
     _haSendSwitch(ha_config->loadSwitch(index), config);
     config["platform"] = "mqtt";
 
@@ -351,7 +351,7 @@ void _haSensorYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, 
     String output;
     output.reserve(HA_YAML_BUFFER_SIZE);
 
-    JsonObject& config = ha_config->get("sensor");
+    JsonObject& config = ha_config->sensor_root;
     _haSendMagnitude(ha_config->loadMagnitude(index), config);
     config["platform"] = "mqtt";
 
