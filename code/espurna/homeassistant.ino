@@ -245,18 +245,16 @@ void _haSendSwitches(ha_config_t& config) {
 
 constexpr const size_t HA_YAML_BUFFER_SIZE = 1024;
 
-void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
+void _haYaml(std::shared_ptr<ha_config_t> ha_config, const String& prefix, const ha_container_t& data, JsonObject& root) {
 
     String output;
     output.reserve(HA_YAML_BUFFER_SIZE);
 
-    const auto& current = ha_config->loadSwitch(index);
-
-    if (index == 0) output += "\n\n" + switchType + ":";
+    if (index == 0) output += "\n\n" + prefix + ":";
     output += "\n";
     bool first = true;
 
-    for (const auto &kv : current) {
+    for (const auto &kv : data) {
         if (first) {
             output += "  - platform: mqtt\n";
             output += "    ";
@@ -268,6 +266,12 @@ void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, 
         output += ": ";
         if (kv.first.startsWith("payload_")) {
             output += _haFixPayload(kv.second);
+        #if SENSOR_SUPPORT
+            } else if (kv.first.equals("unit")) {
+                String value = kv.second;
+                value.replace("%", "'%'");
+                output += value;
+        #endif // SENSOR_SUPPORT
         } else {
             output += kv.first;
         }
@@ -278,38 +282,14 @@ void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, 
     root["haConfig"] = output;
 }
 
+void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
+    _haYaml(ha_config, switchType, ha_config->loadSwitch(index), root);
+}
+
 #if SENSOR_SUPPORT
 
 void _haSensorYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
-
-    String output;
-    output.reserve(HA_YAML_BUFFER_SIZE);
-
-    const auto& current = ha_config->loadMagnitude(index);
-
-    if (index == 0) output += "\n\nsensor:";
-    output += "\n";
-    bool first = true;
-
-    for (const auto &kv : current) {
-        if (first) {
-            output += "  - platform: mqtt\n";
-            output += "    ";
-            first = false;
-        } else {
-            output += "    ";
-        }
-        String value = kv.second;
-        value.replace("%", "'%'");
-        output += kv.first;
-        output += ": ";
-        output += value;
-        output += "\n";
-    }
-    output += " ";
-
-    root["haConfig"] = output;
-
+    _haYaml(ha_config, "sensor", ha_config->loadMagnitude(index), root);
 }
 
 #endif // SENSOR_SUPPORT
