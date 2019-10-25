@@ -8,10 +8,6 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if HOMEASSISTANT_SUPPORT
 
-#include <ArduinoJson.h>
-#include <map>
-
-
 bool _haEnabled = false;
 bool _haSendFlag = false;
 
@@ -56,7 +52,7 @@ const String switchType("switch");
 
 struct ha_config_t {
 
-    static const size_t DEFAULT_BUFFER_SIZE = 2048;
+    static const size_t DEFAULT_BUFFER_SIZE = 1024;
     static const size_t MINIMUM_BUFFER_SIZE = JSON_OBJECT_SIZE(4);
 
     ha_config_t(size_t size) :
@@ -94,11 +90,11 @@ struct ha_config_t {
     JsonObject& root;
 
     JsonObject& switch_root;
-    ha_container_t switch_buffer;
+    ha_container_t switches;
 
     #if SENSOR_SUPPORT
         JsonObject& sensor_root;
-        ha_container_t sensor_buffer;
+        ha_container_t sensors;
     #endif
 
     const String identifier;
@@ -108,57 +104,59 @@ struct ha_config_t {
 
 void _haSendContainer(ha_container_t& source, JsonObject& target) {
     for (const auto &kv : source) {
+        if (!kv.second.length()) continue;
         target[kv.first.c_str()] = kv.second.c_str();
     }
 }
 
 ha_container_t& ha_config_t::loadSwitch(unsigned char i) {
 
-    switch_buffer["uniq_id"] = getIdentifier() + "_" + switchType + "_" + String(i);
+    switches["uniq_id"] = getIdentifier() + "_" + switchType + "_" + String(i);
 
     String name = getSetting("hostname");
     if (relayCount() > 1) {
-        name += String("_") + String(i);
+        name += '_';
+        name += int(i);
     }
-
-    switch_buffer["name"] = _haFixName(name);
+    switches["name"] = _haFixName(name);
 
     if (relayCount()) {
-        switch_buffer["state_topic"] = mqttTopic(MQTT_TOPIC_RELAY, i, false);
-        switch_buffer["command_topic"] = mqttTopic(MQTT_TOPIC_RELAY, i, true);
-        switch_buffer["payload_on"] = relayPayload(RelayStatus::ON);
-        switch_buffer["payload_off"] = relayPayload(RelayStatus::OFF);
-        switch_buffer["availability_topic"] = mqttTopic(MQTT_TOPIC_STATUS, false);
-        switch_buffer["payload_available"] = mqttPayloadStatus(true);
-        switch_buffer["payload_not_available"] = mqttPayloadStatus(false);
+        switches["state_topic"] =  mqttTopic(MQTT_TOPIC_RELAY, i, false);
+        switches["command_topic"] = mqttTopic(MQTT_TOPIC_RELAY, i, true);
+        switches["payload_on"] = relayPayload(RelayStatus::ON);
+        switches["payload_off"] = relayPayload(RelayStatus::OFF);
+        switches["availability_topic"] = mqttTopic(MQTT_TOPIC_STATUS, false);
+        switches["payload_available"] = mqttPayloadStatus(true);
+        switches["payload_not_available"] = mqttPayloadStatus(false);
     }
 
     #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 
         if (i == 0) {
 
-            switch_buffer["brightness_state_topic"] = mqttTopic(MQTT_TOPIC_BRIGHTNESS, false);
-            switch_buffer["brightness_command_topic"] = mqttTopic(MQTT_TOPIC_BRIGHTNESS, true);
+            switches["brightness_state_topic"] = mqttTopic(MQTT_TOPIC_BRIGHTNESS, false);
+            switches["brightness_command_topic"] = mqttTopic(MQTT_TOPIC_BRIGHTNESS, true);
 
             if (lightHasColor()) {
-                switch_buffer["rgb_state_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, false);
-                switch_buffer["rgb_command_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, true);
+                switches["rgb_state_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, false);
+                switches["rgb_command_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, true);
             }
+
             if (lightUseCCT()) {
-                switch_buffer["color_temp_command_topic"] = mqttTopic(MQTT_TOPIC_MIRED, true);
-                switch_buffer["color_temp_state_topic"] = mqttTopic(MQTT_TOPIC_MIRED, false);
+                switches["color_temp_state_topic"] = mqttTopic(MQTT_TOPIC_MIRED, false);
+                switches["color_temp_command_topic"] = mqttTopic(MQTT_TOPIC_MIRED, true);
             }
 
             if (lightChannels() > 3) {
-                switch_buffer["white_value_state_topic"] = mqttTopic(MQTT_TOPIC_CHANNEL, 3, false);
-                switch_buffer["white_value_command_topic"] = mqttTopic(MQTT_TOPIC_CHANNEL, 3, true);
+                switches["white_value_state_topic"] = mqttTopic(MQTT_TOPIC_CHANNEL, 3, false);
+                switches["white_value_command_topic"] = mqttTopic(MQTT_TOPIC_CHANNEL, 3, true);
             }
 
         }
 
     #endif // LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 
-    return switch_buffer;
+    return switches;
 
 }
 
@@ -169,23 +167,21 @@ ha_container_t& ha_config_t::loadSwitch(unsigned char i) {
 #if SENSOR_SUPPORT
 
 ha_container_t& ha_config_t::loadMagnitude(unsigned char id) {
-    unsigned char type = magnitudeType(id);
+    const auto type = magnitudeType(id);
 
-    sensor_buffer["uniq_id"] = getIdentifier() + "_" + magnitudeTopic(magnitudeType(id)) + "_" + String(id);
-    sensor_buffer["name"] = _haFixName(getSetting("hostname") + String(" ") + magnitudeTopic(type));
-    sensor_buffer["state_topic"] = mqttTopic(magnitudeTopicIndex(id).c_str(), false);
+    sensors["uniq_id"] = getIdentifier() + "_" + magnitudeTopic(magnitudeType(id)) + "_" + String(id);
+    sensors["name"] = _haFixName(getSetting("hostname") + String(" ") + magnitudeTopic(type));
+    sensors["state_topic"] = mqttTopic(magnitudeTopicIndex(id).c_str(), false);
+    sensors["unit"] = magnitudeUnits(type);
 
-    const String unit = magnitudeUnits(type);
-    if (unit.length()) sensor_buffer["unit"] = unit;
-
-    return sensor_buffer;
+    return sensors;
 }
 
 void _haSendMagnitudes(ha_config_t& config) {
 
     for (unsigned char i=0; i<magnitudeCount(); i++) {
 
-        String topic = getSetting("haPrefix", HOMEASSISTANT_PREFIX) +
+        const String topic = getSetting("haPrefix", HOMEASSISTANT_PREFIX) +
             "/sensor/" +
             getSetting("hostname") + "_" + String(i) +
             "/config";
@@ -218,7 +214,7 @@ void _haSendSwitches(ha_config_t& config) {
 
     for (unsigned char i=0; i<relayCount(); i++) {
 
-        String topic = getSetting("haPrefix", HOMEASSISTANT_PREFIX) +
+        const String topic = getSetting("haPrefix", HOMEASSISTANT_PREFIX) +
             "/" + switchType +
             "/" + getSetting("hostname") + "_" + String(i) +
             "/config";
@@ -245,7 +241,7 @@ void _haSendSwitches(ha_config_t& config) {
 
 constexpr const size_t HA_YAML_BUFFER_SIZE = 1024;
 
-void _haYaml(std::shared_ptr<ha_config_t> ha_config, const String& prefix, const ha_container_t& data, JsonObject& root) {
+String _haYaml(std::shared_ptr<ha_config_t> ha_config, const String& prefix, const ha_container_t& data, unsigned char index, JsonObject& root) {
 
     String output;
     output.reserve(HA_YAML_BUFFER_SIZE);
@@ -255,6 +251,7 @@ void _haYaml(std::shared_ptr<ha_config_t> ha_config, const String& prefix, const
     bool first = true;
 
     for (const auto &kv : data) {
+        if (!kv.second.length()) continue;
         if (first) {
             output += "  - platform: mqtt\n";
             output += "    ";
@@ -273,34 +270,26 @@ void _haYaml(std::shared_ptr<ha_config_t> ha_config, const String& prefix, const
                 output += value;
         #endif // SENSOR_SUPPORT
         } else {
-            output += kv.first;
+            output += kv.second;
         }
         output += "\n";
     }
     output += " ";
 
-    root["haConfig"] = output;
+    return output;
 }
 
-void _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
-    _haYaml(ha_config, switchType, ha_config->loadSwitch(index), root);
+String _haSwitchYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
+    return _haYaml(ha_config, switchType, ha_config->loadSwitch(index), index, root);
 }
 
 #if SENSOR_SUPPORT
 
-void _haSensorYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
-    _haYaml(ha_config, "sensor", ha_config->loadMagnitude(index), root);
+String _haSensorYaml(std::shared_ptr<ha_config_t> ha_config, unsigned char index, JsonObject& root) {
+    return _haYaml(ha_config, "sensor", ha_config->loadMagnitude(index), index, root);
 }
 
 #endif // SENSOR_SUPPORT
-
-void _haGetDeviceConfig(JsonObject& config) {
-    config.createNestedArray("identifiers").add(getIdentifier());
-    config["name"] = getSetting("desc", getSetting("hostname"));
-    config["manufacturer"] = MANUFACTURER;
-    config["model"] = DEVICE;
-    config["sw_version"] = String(APP_NAME) + " " + APP_VERSION + " (" + getCoreVersion() + ")";
-}
 
 void _haSend() {
 
@@ -358,18 +347,23 @@ void _haWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& d
         if (!callbacks.capacity()) return;
 
         auto ha_config = std::make_shared<ha_config_t>(ha_config_t::MINIMUM_BUFFER_SIZE);
+        auto buffer = std::make_shared<String>();
+        buffer->reserve(HA_YAML_BUFFER_SIZE);
+
         {
             for (unsigned char idx=0; idx<relayCount(); ++idx) {
-                callbacks.push_back([idx, ha_config](JsonObject& root) {
-                    _haSwitchYaml(ha_config, idx, root);
+                callbacks.push_back([idx, ha_config, buffer](JsonObject& root) {
+                    *buffer.get() = _haSwitchYaml(ha_config, idx, root);
+                    root["haConfig"] = buffer->c_str();
                 });
             }
         }
         #if SENSOR_SUPPORT
         {
             for (unsigned char idx=0; idx<magnitudeCount(); ++idx) {
-                callbacks.push_back([idx, ha_config](JsonObject& root) {
-                    _haSensorYaml(ha_config, idx, root);
+                callbacks.push_back([idx, ha_config, buffer](JsonObject& root) {
+                    *buffer.get() = _haSensorYaml(ha_config, idx, root);
+                    root["haConfig"] = buffer->c_str();
                 });
             }
         }
@@ -387,17 +381,11 @@ void _haInitCommands() {
     terminalRegisterCommand(F("HA.CONFIG"), [](Embedis* e) {
         auto ha_config = std::make_shared<ha_config_t>();
         for (unsigned char idx=0; idx<relayCount(); ++idx) {
-            DynamicJsonBuffer jsonBuffer(1024);
-            JsonObject& root = jsonBuffer.createObject();
-            _haSwitchYaml(ha_config, idx, root);
-            DEBUG_MSG(root["haConfig"].as<String>().c_str());
+            DEBUG_MSG(_haSwitchYaml(ha_config, idx, ha_config->switch_root).c_str());
         }
         #if SENSOR_SUPPORT
             for (unsigned char idx=0; idx<magnitudeCount(); ++idx) {
-                DynamicJsonBuffer jsonBuffer(1024);
-                JsonObject& root = jsonBuffer.createObject();
-                _haSensorYaml(ha_config, idx, root);
-                DEBUG_MSG(root["haConfig"].as<String>().c_str());
+                DEBUG_MSG(_haSensorYaml(ha_config, idx, ha_config->sensor_root).c_str());
             }
         #endif // SENSOR_SUPPORT
         DEBUG_MSG("\n");

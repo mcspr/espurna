@@ -155,6 +155,8 @@ bool gpioReleaseLock(unsigned char gpio);
 // Homeassistant
 // -----------------------------------------------------------------------------
 #include <map>
+#include <ArduinoJson.h>
+
 struct ha_config_t;
 void haSetup();
 
