@@ -391,11 +391,13 @@ function getData(form, changed, cleanup) {
     // When empty, the receiving side will prune all keys greater than the current one.
     if (cleanup) {
         $(".group-settings").each(function() {
-            var targets = this.dataset.settingsTarget;
-            if (targets !== undefined) {
-                targets.split(" ").forEach(function(target) {
-                    resulting_data[target] = [];
-                });
+            if (!this.children.length) {
+                const targets = this.dataset.settingsTarget;
+                if (targets !== undefined) {
+                    targets.split(" ").forEach(function(target) {
+                        resulting_data[target] = [];
+                    });
+                }
             }
         });
     }
