@@ -120,7 +120,7 @@ function keepTime() {
 }
 
 function zeroPad(number, positions) {
-    return toString(number).padStart(positions, "0");
+    return number.toString().padStart(positions, "0");
 }
 
 function loadTimeZones() {
@@ -136,16 +136,16 @@ function loadTimeZones() {
         720, 765, 780, 840
     ];
 
-    for (var i in time_zones) {
-        var value = time_zones[i];
-        var offset = value >= 0 ? value : -value;
-        var text = "GMT" + (value >= 0 ? "+" : "-") +
+    for (const tz of time_zones) {
+        var offset = tz >= 0 ? tz : -tz;
+        var text = "GMT" + (tz >= 0 ? "+" : "-") +
             zeroPad(parseInt(offset / 60, 10), 2) + ":" +
             zeroPad(offset % 60, 2);
         $("select[name='ntpOffset']").append(
-            $("<option></option>").
-                attr("value",value).
-                text(text));
+            $("<option></option>")
+                .attr("value", tz)
+                .text(text)
+        );
     }
 
 }
