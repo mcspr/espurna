@@ -11,7 +11,7 @@ var numChanged = 0;
 var numReboot = 0;
 var numReconnect = 0;
 var numReload = 0;
-var conf_saved = false;
+var configurationSaved = false;
 
 var useWhite = false;
 var useCCT = false;
@@ -1930,7 +1930,7 @@ function processData(data) {
         // Messages
         if ("message" === key) {
             if (value == 8 && (numReboot > 0 || numReload > 0 || numReconnect > 0)){
-                conf_saved = true;
+                configurationSaved = true;
             }
             window.alert(messages[value]);
             return;
@@ -1940,8 +1940,8 @@ function processData(data) {
         if ("weblog" === key) {
             send("{}");
 
-            msg = value["msg"];
-            pre = value["pre"];
+            const msg = value["msg"];
+            const pre = value["pre"];
 
             for (var i=0; i < msg.length; ++i) {
                 if (pre[i]) {
