@@ -19,14 +19,14 @@ var useCCT = false;
 var now = 0;
 var ago = 0;
 
-<!-- removeIf(!rfm69)-->
+//removeIf(!rfm69)
 var packets;
 var filters = [];
-<!-- endRemoveIf(!rfm69)-->
+//endRemoveIf(!rfm69)
 
-<!-- removeIf(!sensor)-->
+//removeIf(!sensor)
 var magnitudes = [];
-<!-- endRemoveIf(!sensor)-->
+//endRemoveIf(!sensor)
 
 // -----------------------------------------------------------------------------
 // Messages
@@ -44,7 +44,7 @@ function initMessages() {
     messages[10] = "Session expired, please reload page...";
 }
 
-<!-- removeIf(!sensor)-->
+//removeIf(!sensor)
 function sensorName(id) {
     var names = [
         "DHT", "Dallas", "Emon Analog", "Emon ADC121", "Emon ADS1X15",
@@ -88,7 +88,7 @@ function magnitudeError(error) {
     }
     return "Error " + error;
 }
-<!-- endRemoveIf(!sensor)-->
+//endRemoveIf(!sensor)
 
 // -----------------------------------------------------------------------------
 // Utils
@@ -478,7 +478,7 @@ function getJson(str) {
     }
 }
 
-<!-- removeIf(!thermostat)-->
+//removeIf(!thermostat)
 function checkTempRangeMin() {
     var min = parseInt($("#tempRangeMinInput").val(), 10);
     var max = parseInt($("#tempRangeMaxInput").val(), 10);
@@ -501,7 +501,7 @@ function doResetThermostatCounters(ask) {
         "Are you sure you want to reset burning counters?";
     return doAction(question, "thermostat_reset_counters");
 }
-<!-- endRemoveIf(!thermostat)-->
+//endRemoveIf(!thermostat)
 
 function initGPIO(node, name, key, value) {
 
@@ -861,7 +861,7 @@ function doDebugClear() {
     return false;
 }
 
-<!-- removeIf(!rfm69)-->
+//removeIf(!rfm69)
 
 function doClearCounts() {
     sendAction("clear-counts", {});
@@ -909,7 +909,7 @@ function doClearFilters() {
     return false;
 }
 
-<!-- endRemoveIf(!rfm69)-->
+//endRemoveIf(!rfm69)
 
 function delParent() {
     var parent = $(this).parent().parent();
@@ -952,7 +952,7 @@ function createRelayList(data, container, template_name) {
 
 }
 
-<!-- removeIf(!sensor)-->
+//removeIf(!sensor)
 function createMagnitudeList(data, container, template_name) {
 
     var current = $("#" + container + " > div").length;
@@ -971,7 +971,7 @@ function createMagnitudeList(data, container, template_name) {
     }
 
 }
-<!-- endRemoveIf(!sensor)-->
+//endRemoveIf(!sensor)
 
 // -----------------------------------------------------------------------------
 // RPN Rules
@@ -1005,7 +1005,7 @@ function addRPNTopic() {
 // RFM69
 // -----------------------------------------------------------------------------
 
-<!-- removeIf(!rfm69)-->
+//removeIf(!rfm69)
 
 function addMapping() {
     var template = $("#nodeTemplate .pure-g")[0];
@@ -1019,7 +1019,7 @@ function addMapping() {
     line.appendTo("#mapping");
 }
 
-<!-- endRemoveIf(!rfm69)-->
+//endRemoveIf(!rfm69)
 
 // -----------------------------------------------------------------------------
 // Wifi
@@ -1264,7 +1264,7 @@ function initLeds(data) {
 // Sensors & Magnitudes
 // -----------------------------------------------------------------------------
 
-<!-- removeIf(!sensor)-->
+//removeIf(!sensor)
 function initMagnitudes(data) {
 
     // check if already initialized (each magnitude is inside div.pure-g)
@@ -1292,13 +1292,13 @@ function initMagnitudes(data) {
     }
 
 }
-<!-- endRemoveIf(!sensor)-->
+//endRemoveIf(!sensor)
 
 // -----------------------------------------------------------------------------
 // Lights
 // -----------------------------------------------------------------------------
 
-<!-- removeIf(!light)-->
+//removeIf(!light)
 
 // wheelColorPicker accepts:
 //   hsv(0...360,0...1,0...1)
@@ -1445,13 +1445,13 @@ function initChannels(num) {
     });
 
 }
-<!-- endRemoveIf(!light)-->
+//endRemoveIf(!light)
 
 // -----------------------------------------------------------------------------
 // RFBridge
 // -----------------------------------------------------------------------------
 
-<!-- removeIf(!rfbridge)-->
+//removeIf(!rfbridge)
 
 function rfbLearn() {
     var parent = $(this).parents(".pure-g");
@@ -1491,13 +1491,13 @@ function addRfbNode() {
 
     return line;
 }
-<!-- endRemoveIf(!rfbridge)-->
+//endRemoveIf(!rfbridge)
 
 // -----------------------------------------------------------------------------
 // LightFox
 // -----------------------------------------------------------------------------
 
-<!-- removeIf(!lightfox)-->
+//removeIf(!lightfox)
 
 function lightfoxLearn() {
     sendAction("lightfoxLearn", {});
@@ -1534,7 +1534,7 @@ function initLightfox(data, relayCount) {
     $(".button-lightfox-clear").off("click").click(lightfoxClear);
 
 }
-<!-- endRemoveIf(!lightfox)-->
+//endRemoveIf(!lightfox)
 
 // -----------------------------------------------------------------------------
 // Processing
@@ -1585,7 +1585,7 @@ function processData(data) {
         // RFBridge
         // ---------------------------------------------------------------------
 
-        <!-- removeIf(!rfbridge)-->
+        //removeIf(!rfbridge)
 
         if ("rfbCount" === key) {
             for (i=0; i<data.rfbCount; i++) { addRfbNode(); }
@@ -1609,26 +1609,26 @@ function processData(data) {
             return;
         }
 
-        <!-- endRemoveIf(!rfbridge)-->
+        //endRemoveIf(!rfbridge)
 
         // ---------------------------------------------------------------------
         // LightFox
         // ---------------------------------------------------------------------
 
-        <!-- removeIf(!lightfox)-->
+        //removeIf(!lightfox)
 
         if ("lightfoxButtons" === key) {
             initLightfox(data["lightfoxButtons"], data["lightfoxRelayCount"]);
             return;
         }
 
-        <!-- endRemoveIf(!rfbridge)-->
+        //endRemoveIf(!lightfox)
 
         // ---------------------------------------------------------------------
         // RFM69
         // ---------------------------------------------------------------------
 
-        <!-- removeIf(!rfm69)-->
+        //removeIf(!rfm69)
 
         if (key == "packet") {
             var packet = data.packet;
@@ -1668,7 +1668,7 @@ function processData(data) {
 			return;
         }
 
-        <!-- endRemoveIf(!rfm69)-->
+        //endRemoveIf(!rfm69)
 
         // ---------------------------------------------------------------------
         // RPN Rules
@@ -1720,7 +1720,7 @@ function processData(data) {
         // Lights
         // ---------------------------------------------------------------------
 
-        <!-- removeIf(!light)-->
+        //removeIf(!light)
 
         if ("rgb" === key) {
             initColor({rgb: true});
@@ -1768,13 +1768,13 @@ function processData(data) {
             useCCT = value;
         }
 
-        <!-- endRemoveIf(!light)-->
+        //endRemoveIf(!light)
 
         // ---------------------------------------------------------------------
         // Sensors & Magnitudes
         // ---------------------------------------------------------------------
 
-        <!-- removeIf(!sensor)-->
+        //removeIf(!sensor)
 
         if ("magnitudesConfig" === key) {
             initMagnitudes(value);
@@ -1792,7 +1792,7 @@ function processData(data) {
             return;
         }
 
-        <!-- endRemoveIf(!sensor)-->
+        //endRemoveIf(!sensor)
 
         // ---------------------------------------------------------------------
         // WiFi
@@ -1887,12 +1887,12 @@ function processData(data) {
         }
 
         // Domoticz - Magnitudes
-        <!-- removeIf(!sensor)-->
+        //removeIf(!sensor)
         if ("dczMagnitudes" === key) {
             createMagnitudeList(value, "dczMagnitudes", "dczMagnitudeTemplate");
             return;
         }
-        <!-- endRemoveIf(!sensor)-->
+        //endRemoveIf(!sensor)
 
         // ---------------------------------------------------------------------
         // Thingspeak
@@ -1905,12 +1905,12 @@ function processData(data) {
         }
 
         // Thingspeak - Magnitudes
-        <!-- removeIf(!sensor)-->
+        //removeIf(!sensor)
         if ("tspkMagnitudes" === key) {
             createMagnitudeList(value, "tspkMagnitudes", "tspkMagnitudeTemplate");
             return;
         }
-        <!-- endRemoveIf(!sensor)-->
+        //endRemoveIf(!sensor)
 
         // ---------------------------------------------------------------------
         // HTTP API
@@ -1998,11 +1998,11 @@ function processData(data) {
             var days    = uptime;
             value = days + "d " + zeroPad(hours, 2) + "h " + zeroPad(minutes, 2) + "m " + zeroPad(seconds, 2) + "s";
         }
-        <!-- removeIf(!thermostat)-->
+        //removeIf(!thermostat)
         if ("tmpUnits" == key) {
             $("span.tmpUnit").html(data[key] == 1 ? "ºF" : "ºC");
         }
-        <!-- endRemoveIf(!thermostat)-->
+        //endRemoveIf(!thermostat)
 
         // ---------------------------------------------------------------------
         // Matching
@@ -2185,9 +2185,9 @@ $(function() {
     $("#uploader").on("change", onFileUpload);
     $(".button-upgrade").on("click", doUpgrade);
 
-    <!-- removeIf(!thermostat)-->
+    //removeIf(!thermostat)
     $(".button-thermostat-reset-counters").on('click', doResetThermostatCounters);
-    <!-- endRemoveIf(!thermostat)-->
+    //endRemoveIf(!thermostat)
 
     $(".button-apikey").on("click", generateAPIKey);
     $(".button-upgrade-browse").on("click", function() {
@@ -2205,18 +2205,18 @@ $(function() {
     $(".button-add-switch-schedule").on("click", function() {
         addSchedule({schType: 1, schSwitch: -1});
     });
-    <!-- removeIf(!light)-->
+    //removeIf(!light)
     $(".button-add-light-schedule").on("click", function() {
         addSchedule({schType: 2, schSwitch: -1});
     });
-    <!-- endRemoveIf(!light)-->
+    //endRemoveIf(!light)
 
     $(".button-add-rpnrule").on('click', addRPNRule);
     $(".button-add-rpntopic").on('click', addRPNTopic);
 
     $(".button-del-parent").on('click', delParent);
 
-    <!-- removeIf(!rfm69)-->
+    //removeIf(!rfm69)
     $(".button-add-mapping").on('click', addMapping);
     $(".button-clear-counts").on('click', doClearCounts);
     $(".button-clear-messages").on('click', doClearMessages);
@@ -2228,7 +2228,7 @@ $(function() {
     for (var i = 0; i < packets.columns()[0].length; i++) {
         filters[i] = false;
     }
-    <!-- endRemoveIf(!rfm69)-->
+    //endRemoveIf(!rfm69)
 
     $(".gpio-select").each(function(_, elem) {
         initSelectGPIO(elem)
@@ -2247,8 +2247,6 @@ $(function() {
 
     // don't autoconnect when opening from filesystem
     if (window.location.protocol === "file:") {
-        processData({"webMode": 2, "multirelayVisible": 1, "ledVisible": 1, "relayVisible": 1});
-        processData({"ledConfig": [{"mode": 0, "relay": 0}]});
         return;
     }
 

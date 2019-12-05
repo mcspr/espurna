@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 const gulp = require('gulp');
 const through = require('through2');
+const PluginError = require('plugin-error');
 
 const htmlmin = require('gulp-htmlmin');
 const inline = require('gulp-inline');
@@ -43,6 +44,9 @@ const replace = require('gulp-replace');
 const remover = require('gulp-remove-code');
 const gzip = require('gulp-gzip');
 const path = require('path');
+
+const babel = require('@babel/core')
+const terser = require('terser')
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -107,42 +111,118 @@ var htmllintReporter = function(filepath, issues) {
     }
 };
 
+var transpileJs = function() {
+
+    return through.obj(function (source, encoding, callback) {
+
+        if (source.isNull()) {
+            callback(null, source);
+            return;
+        }
+
+        if (!source.path.endsWith("custom.js")) {
+            callback(null, source);
+            return;
+        }
+
+        // XXX: see https://github.com/babel/minify/issues/904
+        //      `{builtIns: true}`` will crash when building *default* target
+        //      nothing breaks when building each one individually
+        const opts = {
+            comments: false,
+            presets: ['@babel/env']
+        };
+
+        let _this = this;
+        const resultCb = function(result) {
+            if (result) {
+                source.contents = Buffer.from(result.code);
+            }
+            _this.push(source);
+            callback();
+        };
+
+        const errorCb = function(error) {
+            _this.emit('error', error);
+            callback();
+        };
+
+        babel.transformAsync(source.contents, opts)
+            .then(resultCb)
+            .catch(errorCb);
+
+    });
+
+};
+
+var compressJs = function() {
+
+    return through.obj(function (source, encoding, callback) {
+
+        if (source.isNull()) {
+            callback(null, source);
+            return;
+        }
+
+        if (!source.path.endsWith("custom.js")) {
+            callback(null, source);
+            return;
+        }
+
+        source.contents = Buffer.from(terser.minify(source.contents.toString()).code);
+        this.push(source);
+        callback();
+
+    });
+
+};
+
 var buildWebUI = function(module) {
 
-    var modules = {'light': false, 'sensor': false, 'rfbridge': false, 'rfm69': false, 'thermostat': false};
+    var modules = {
+        'light': false,
+        'sensor': false,
+        'rfbridge': false,
+        'rfm69': false,
+        'thermostat': false,
+        'lightfox': false
+    };
     if ('all' === module) {
-        modules['light'] = true;
-        modules['sensor'] = true;
-        modules['rfbridge'] = true;
-        modules['rfm69'] = false;   // we will never be adding this except when building RFM69GW
-        modules['lightfox'] = false;   // we will never be adding this except when building lightfox
-        modules['thermostat'] = true;
+        Object.keys(modules).forEach(function(key) {
+            // Note: only build these when specified as module arg
+            if (key === "rfm69") return;
+            if (key === "lightfox") return;
+            modules[key] = true;
+        });
     } else if ('small' !== module) {
         modules[module] = true;
     }
 
+    // Note: different comment styles in html and js
+    // 1st call for the global html, 2nd for the custom.js
     return gulp.src(htmlFolder + '*.html').
+        pipe(remover(modules)).
         pipe(htmllint({
             'failOnError': true,
             'rules': {
                 'id-class-style': false,
                 'label-req-for': false,
+                'line-no-trailing-whitespace': false,
                 'line-end-style': false,
             }
         }, htmllintReporter)).
         pipe(favicon()).
         pipe(inline({
             base: htmlFolder,
-            js: [],
+            js: [function() { return remover(modules); }, transpileJs, compressJs],
             css: [crass, inlineImages],
             disabledTypes: ['svg', 'img']
         })).
-        pipe(remover(modules)).
         pipe(htmlmin({
             collapseWhitespace: true,
             removeComments: true,
             minifyCSS: true,
-            minifyJS: true
+            minifyJS: false
         })).
         pipe(replace('pure-', 'p-')).
         pipe(gzip()).
