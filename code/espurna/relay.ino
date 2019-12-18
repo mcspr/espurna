@@ -34,6 +34,9 @@ struct relay_t {
         current_status(false),
         target_status(false),
         lock(RELAY_LOCK_DISABLED),
+        lock_after(false),
+        lock_start(0),
+        lock_delay(0),
         fw_start(0),
         fw_count(0),
         change_start(0),
@@ -67,6 +70,9 @@ struct relay_t {
     bool current_status;         // Holds the current (physical) status of the relay
     bool target_status;          // Holds the target status
     unsigned char lock;          // Holds the value of target status, that cannot be changed afterwards. (0 for false, 1 for true, 2 to disable)
+    bool lock_after;      // Whether to lock the status after any request to change it.
+    unsigned long lock_start;
+    unsigned long lock_delay;
     unsigned long fw_start;      // Flood window start time
     unsigned char fw_count;      // Number of changes within the current flood window
     unsigned long change_start;  // Time when relay was scheduled to change
@@ -89,16 +95,10 @@ unsigned long _relay_flood_changes = RELAY_FLOOD_CHANGES;
 
 unsigned long _relay_delay_interlock;
 unsigned char _relay_sync_mode = RELAY_SYNC_ANY;
-bool _relay_sync_locked = false;
 
 Ticker _relay_save_timer;
-Ticker _relay_sync_timer;
 
-#if WEB_SUPPORT
-
-bool _relay_report_ws = false;
-
-#endif // WEB_SUPPORT
+bool _relay_changed = false;
 
 #if MQTT_SUPPORT
 
@@ -138,18 +138,46 @@ RelayStatus _relayStatusTyped(unsigned char id) {
     return (status) ? RelayStatus::ON : RelayStatus::OFF;
 }
 
-void _relayLockAll() {
-    for (auto& relay : _relays) {
-        relay.lock = relay.target_status ? RELAY_LOCK_ON : RELAY_LOCK_OFF;
+void _relayLock(unsigned char id, bool interlock = false) {
+    if (id >= _relays.size()) return;
+    auto& relay = _relays[id];
+
+    if (!_relay_delay_interlock) return;
+
+    if (interlock) {
+        relay.lock_start = millis();
+        relay.lock_delay = relay.change_delay + _relay_delay_interlock;
+        DEBUG_MSG_P(PSTR("[RELAY] #%d locked %s for the next %ums\n"),
+            id, (relay.target_status ? "ON" : "OFF"), relay.lock_delay
+        );
+    } else {
+        DEBUG_MSG_P(PSTR("[RELAY] #%d locked %s\n"),
+            id, (relay.target_status ? "ON" : "OFF")
+        );
     }
-    _relay_sync_locked = true;
+
+    relay.lock = relay.target_status ? RELAY_LOCK_ON : RELAY_LOCK_OFF;
+    _relay_changed = true;
+}
+
+void _relayUnlock(unsigned char id) {
+    if (id >= _relays.size()) return;
+    _relays[id].lock_delay = 0;
+    _relays[id].lock = RELAY_LOCK_DISABLED;
+    _relay_changed = true;
+}
+
+void _relayLockAll(bool interlock = true) {
+    for (unsigned char id = 0; id < _relays.size(); ++id) {
+        _relayLock(id, interlock);
+    }
 }
 
 void _relayUnlockAll() {
     for (auto& relay : _relays) {
         relay.lock = RELAY_LOCK_DISABLED;
     }
-    _relay_sync_locked = false;
+    _relay_changed = true;
 }
 
 bool _relayStatusLock(unsigned char id, bool status) {
@@ -178,28 +206,12 @@ void _relaySyncRelaysDelay(unsigned char first, unsigned char second) {
     });
 }
 
-void _relaySyncUnlock() {
-    bool unlock = true;
-    bool all_off = true;
-    for (const auto& relay : _relays) {
-        unlock = unlock && (relay.current_status == relay.target_status);
-        if (!unlock) break;
-        all_off = all_off && !relay.current_status;
-    }
-
-    if (!unlock) return;
-
-    auto action = []() {
-        _relayUnlockAll();
+void _relayReport() {
+    if (_relay_changed) {
         #if WEB_SUPPORT
-            _relay_report_ws = true;
+            wsPost(_relayWebSocketUpdate);
         #endif
-    };
-
-    if (all_off) {
-        _relay_sync_timer.once_ms(_relay_delay_interlock, action);
-    } else {
-        action();
+        _relay_changed = false;
     }
 }
 
@@ -315,14 +327,23 @@ void _relayProviderStatus(unsigned char id, bool status) {
 
 }
 
+void _relayUnlockExpired() {
+    for (unsigned char id = 0; id < _relays.size(); id++) {
+        auto& relay = _relays.at(id);
+        if (!relay.lock_delay) continue;
+        if (millis() - relay.lock_start < relay.lock_delay) continue;
+        if ((relay.target_status == relay.current_status) && relay.lock != RELAY_LOCK_DISABLED) {
+            _relayUnlock(id);
+        }
+    }
+}
+
 /**
  * Walks the relay vector processing only those relays
  * that have to change to the requested mode
  * @bool mode Requested mode
  */
 void _relayProcess(bool mode) {
-
-    bool changed = false;
 
     for (unsigned char id = 0; id < _relays.size(); id++) {
 
@@ -339,7 +360,6 @@ void _relayProcess(bool mode) {
 
         // Purge existing delay in case of cancelation
         _relays[id].change_delay = 0;
-        changed = true;
 
         DEBUG_MSG_P(PSTR("[RELAY] #%d set to %s\n"), id, target ? "ON" : "OFF");
 
@@ -354,10 +374,6 @@ void _relayProcess(bool mode) {
         // Send MQTT
         #if MQTT_SUPPORT
             relayMQTT(id);
-        #endif
-
-        #if WEB_SUPPORT
-            _relay_report_ws = true;
         #endif
 
         if (!_relayRecursive) {
@@ -375,12 +391,8 @@ void _relayProcess(bool mode) {
         _relays[id].report = false;
         _relays[id].group_report = false;
 
-    }
+        _relay_changed = true;
 
-    // Whenever we are using sync modes and any relay had changed the state, check if we can unlock
-    const bool needs_unlock = ((_relay_sync_mode == RELAY_SYNC_NONE_OR_ONE) || (_relay_sync_mode == RELAY_SYNC_ONE));
-    if (_relay_sync_locked && needs_unlock && changed) {
-        _relaySyncUnlock();
     }
 
 }
@@ -545,11 +557,15 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
         relaySync(id);
 
         DEBUG_MSG_P(PSTR("[RELAY] #%d scheduled %s in %u ms\n"),
-            id, status ? "ON" : "OFF", _relays[id].change_delay
+            id, (status ? "ON" : "OFF"), _relays[id].change_delay
         );
 
         changed = true;
 
+    }
+
+    if (changed && _relays[id].lock_after) {
+        _relayLock(id, true);
     }
 
     return changed;
@@ -810,6 +826,8 @@ void _relayConfigure() {
 
         _relays[i].delay_on = getSetting("relayDelayOn", i, _relayDelayOn(i)).toInt();
         _relays[i].delay_off = getSetting("relayDelayOff", i, _relayDelayOff(i)).toInt();
+
+        _relays[i].lock_after = getSetting("relayLockAfter", i, 0).toInt() == 1;
 
         if (GPIO_NONE == _relays[i].pin) continue;
 
@@ -1351,12 +1369,8 @@ void _relayInitCommands() {
 void _relayLoop() {
     _relayProcess(false);
     _relayProcess(true);
-    #if WEB_SUPPORT
-        if (_relay_report_ws) {
-            wsPost(_relayWebSocketUpdate);
-            _relay_report_ws = false;
-        }
-    #endif
+    _relayUnlockExpired();
+    _relayReport();
 }
 
 // Dummy relays for virtual light switches, Sonoff Dual, Sonoff RF Bridge and Tuya
