@@ -42,9 +42,7 @@ struct relay_t {
         flood_mode(RelayFloodMode::DELAY_PROCESSING),
         timer_start(0),
         timer_delay(0),
-        flood_count(RELAY_FLOOD_CHANGES),
-        report(false),
-        group_report(false)
+        flood_count(RELAY_FLOOD_CHANGES)
     {}
 
     relay_t() :
@@ -156,7 +154,7 @@ void _relayLock(unsigned char id, bool interlock = false) {
         relay.timer_start = millis();
         relay.timer_delay = relay.change_delay + _relay_delay_interlock;
         DEBUG_MSG_P(PSTR("[RELAY] #%d locked %s for the next %ums\n"),
-            id, (relay.target_status ? "ON" : "OFF"), relay.lock_delay
+            id, (relay.target_status ? "ON" : "OFF"), relay.timer_delay
         );
     } else {
         DEBUG_MSG_P(PSTR("[RELAY] #%d locked %s\n"),
@@ -170,7 +168,7 @@ void _relayLock(unsigned char id, bool interlock = false) {
 
 void _relayUnlock(unsigned char id) {
     if (id >= _relays.size()) return;
-    _relays[id].lock_delay = 0;
+    _relays[id].timer_delay = 0;
     _relays[id].lock = RELAY_LOCK_DISABLED;
     _relay_changed = true;
 }
@@ -540,7 +538,7 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
 
         // If current_time is off-limits the floodWindow...
         if (_relays[id].flood_mode == RelayFloodMode::DELAY_PROCESSING) {
-            const auto fw_diff = current_time - _relays[id].flood_start;
+            const auto fw_diff = current_time - _relays[id].timer_start;
             if (fw_diff > _relay_flood_window) {
 
                 // We reset the floodWindow
