@@ -825,6 +825,24 @@ void _relayBoot() {
 
 }
 
+RelayFloodMode _relayFloodMode(int value) {
+    switch (value) {
+        case 2: return RelayFloodMode::LOCK_AFTER;
+        case 0: return RelayFloodMode::NONE;
+        case 1:
+        default:
+            return RelayFloodMode::DELAY_PROCESSING;
+    }
+}
+
+int _relayFloodMode(RelayFloodMode value) {
+    switch (value) {
+        case RelayFloodMode::NONE: return 0;
+        case RelayFloodMode::DELAY_PROCESSING: return 1;
+        case RelayFloodMode::LOCK_AFTER: return 2;
+    }
+}
+
 void _relayConfigure() {
     for (unsigned int i=0; i<_relays.size(); i++) {
         _relays[i].pulse = getSetting("relayPulse", i, RELAY_PULSE_MODE).toInt();
@@ -833,12 +851,9 @@ void _relayConfigure() {
         _relays[i].delay_on = getSetting("relayDelayOn", i, _relayDelayOn(i)).toInt();
         _relays[i].delay_off = getSetting("relayDelayOff", i, _relayDelayOff(i)).toInt();
 
-        const auto flood_mode = getSetting("relayFloodMode", i, "0");
-        if (flood_mode.equals("0")) {
-            _relays[i].flood_mode = RelayFloodMode::DELAY_PROCESSING;
-        } else if (flood_mode.equals("1") {
-            _relays[i].flood_mode = RelayFloodMode::LOCK_AFTER;
-        }
+        _relays[i].flood_mode = _relayFloodMode(
+            getSetting("relayFloodMode", i, _relayFloodMode(RelayFloodMode::DELAY_PROCESSING)).toInt()
+        );
 
         if (GPIO_NONE == _relays[i].pin) continue;
 
