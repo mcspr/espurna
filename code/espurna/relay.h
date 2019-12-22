@@ -51,6 +51,11 @@ struct RelayMask {
 
 };
 
+enum class RelayFloodMode {
+    DELAY_PROCESSING,
+    LOCK_AFTER
+};
+
 RelayStatus relayParsePayload(const char * payload);
 
 bool relayStatus(unsigned char id, bool status, bool report, bool group_report);

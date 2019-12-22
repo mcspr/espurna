@@ -34,13 +34,14 @@ struct relay_t {
         current_status(false),
         target_status(false),
         lock(RELAY_LOCK_DISABLED),
-        lock_after(false),
-        lock_start(0),
-        lock_delay(0),
-        fw_start(0),
-        fw_count(0),
+        report(false),
+        group_report(false),
         change_start(0),
         change_delay(0),
+        flood_mode(RelayFloodMode::DELAY_PROCESSING),
+        timer_start(0),
+        timer_delay(0),
+        flood_count(RELAY_FLOOD_CHANGES),
         report(false),
         group_report(false)
     {}
@@ -70,15 +71,21 @@ struct relay_t {
     bool current_status;         // Holds the current (physical) status of the relay
     bool target_status;          // Holds the target status
     unsigned char lock;          // Holds the value of target status, that cannot be changed afterwards. (0 for false, 1 for true, 2 to disable)
-    bool lock_after;      // Whether to lock the status after any request to change it.
-    unsigned long lock_start;
-    unsigned long lock_delay;
-    unsigned long fw_start;      // Flood window start time
-    unsigned char fw_count;      // Number of changes within the current flood window
-    unsigned long change_start;  // Time when relay was scheduled to change
-    unsigned long change_delay;  // Delay until the next change
     bool report;                 // Whether to report to own topic
     bool group_report;           // Whether to report to group topic
+
+    // Delayed status change timer
+
+    unsigned long change_start;  // Time when relay was scheduled to change
+    unsigned long change_delay;  // Delay until the next change
+
+    // Internal timer (atm, for flood control)
+
+    unsigned long timer_start;
+    unsigned long timer_delay;
+
+    unsigned char flood_count;   // Number of changes within the current flood window
+    RelayFloodMode flood_mode;   // ::DELAY or ::LOCK_AFTER
 
     // Helping objects
 
@@ -145,8 +152,8 @@ void _relayLock(unsigned char id, bool interlock = false) {
     if (!_relay_delay_interlock) return;
 
     if (interlock) {
-        relay.lock_start = millis();
-        relay.lock_delay = relay.change_delay + _relay_delay_interlock;
+        relay.timer_start = millis();
+        relay.timer_delay = relay.change_delay + _relay_delay_interlock;
         DEBUG_MSG_P(PSTR("[RELAY] #%d locked %s for the next %ums\n"),
             id, (relay.target_status ? "ON" : "OFF"), relay.lock_delay
         );
@@ -197,8 +204,8 @@ bool _relayStatusLock(unsigned char id, bool status) {
 // completely reset timing on the other relay to sync with this one
 // to ensure that they change state sequentially
 void _relaySyncRelaysDelay(unsigned char first, unsigned char second) {
-    _relays[second].fw_start = _relays[first].change_start;
-    _relays[second].fw_count = 1;
+    _relays[second].timer_start = _relays[first].change_start;
+    _relays[second].flood_count = 1;
     _relays[second].change_delay = std::max({
         _relay_delay_interlock,
         _relays[first].change_delay,
@@ -330,8 +337,8 @@ void _relayProviderStatus(unsigned char id, bool status) {
 void _relayUnlockExpired() {
     for (unsigned char id = 0; id < _relays.size(); id++) {
         auto& relay = _relays.at(id);
-        if (!relay.lock_delay) continue;
-        if (millis() - relay.lock_start < relay.lock_delay) continue;
+        if (relay.flood_mode != RelayFloodMode::LOCK_AFTER) continue;
+        if (millis() - relay.timer_start < relay.timer_delay) continue;
         if ((relay.target_status == relay.current_status) && relay.lock != RELAY_LOCK_DISABLED) {
             _relayUnlock(id);
         }
@@ -526,28 +533,32 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
         unsigned long current_time = millis();
         unsigned long change_delay = status ? _relays[id].delay_on : _relays[id].delay_off;
 
-        _relays[id].fw_count++;
+        _relays[id].flood_count++;
         _relays[id].change_start = current_time;
         _relays[id].change_delay = std::max(_relays[id].change_delay, change_delay);
 
         // If current_time is off-limits the floodWindow...
-        const auto fw_diff = current_time - _relays[id].fw_start;
-        if (fw_diff > _relay_flood_window) {
+        if (_relays[id].flood_mode == RelayFloodMode::DELAY_PROCESSING) {
+            const auto fw_diff = current_time - _relays[id].flood_start;
+            if (fw_diff > _relay_flood_window) {
 
-            // We reset the floodWindow
-            _relays[id].fw_start = current_time;
-            _relays[id].fw_count = 1;
+                // We reset the floodWindow
+                _relays[id].timer_start = current_time;
+                _relays[id].flood_count = 1;
 
-        // If current_time is in the floodWindow and there have been too many requests...
-        } else if (_relays[id].fw_count >= _relay_flood_changes) {
+            // If current_time is in the floodWindow and there have been too many requests...
+            } else if (_relays[id].flood_count >= _relay_flood_changes) {
 
-            // We schedule the changes to the end of the floodWindow
-            // unless it's already delayed beyond that point
-            _relays[id].change_delay = std::max(change_delay, _relay_flood_window - fw_diff);
+                // We schedule the changes to the end of the floodWindow
+                // unless it's already delayed beyond that point
+                _relays[id].change_delay = std::max(change_delay, _relay_flood_window - fw_diff);
 
-            // Another option is to always move it forward, starting from current time
-            //_relays[id].fw_start = current_time;
+                // Another option is to always move it forward, starting from current time
+                //_relays[id].timer_start = current_time;
 
+            }
+        } else if (_relays[id].flood_mode == RelayFloodMode::LOCK_AFTER) {
+            _relayLock(id, true);
         }
 
         _relays[id].target_status = status;
@@ -562,10 +573,6 @@ bool relayStatus(unsigned char id, bool status, bool report, bool group_report) 
 
         changed = true;
 
-    }
-
-    if (changed && _relays[id].lock_after) {
-        _relayLock(id, true);
     }
 
     return changed;
@@ -827,7 +834,12 @@ void _relayConfigure() {
         _relays[i].delay_on = getSetting("relayDelayOn", i, _relayDelayOn(i)).toInt();
         _relays[i].delay_off = getSetting("relayDelayOff", i, _relayDelayOff(i)).toInt();
 
-        _relays[i].lock_after = getSetting("relayLockAfter", i, 0).toInt() == 1;
+        const auto flood_mode = getSetting("relayFloodMode", i, "0");
+        if (flood_mode.equals("0")) {
+            _relays[i].flood_mode = RelayFloodMode::DELAY_PROCESSING;
+        } else if (flood_mode.equals("1") {
+            _relays[i].flood_mode = RelayFloodMode::LOCK_AFTER;
+        }
 
         if (GPIO_NONE == _relays[i].pin) continue;
 
