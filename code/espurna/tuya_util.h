@@ -97,28 +97,4 @@ namespace Tuya {
             std::vector<Container> _states;
     };
 
-    class DiscoveryTimeout {
-        public:
-            DiscoveryTimeout(uint32_t start, uint32_t timeout) :
-                _start(start),
-                _timeout(timeout)
-            {}
-
-            DiscoveryTimeout(uint32_t timeout) :
-                DiscoveryTimeout(millis(), timeout)
-            {}
-
-            operator bool() {
-                return (millis() - _start > _timeout);
-            }
-
-            void feed() {
-                _start = millis();
-            }
-
-        private:
-            uint32_t _start;
-            const uint32_t _timeout;
-    };
-
 }

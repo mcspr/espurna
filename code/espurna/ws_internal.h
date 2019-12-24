@@ -14,6 +14,8 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <memory>
 #include <vector>
 
+#include "libs/Timeouts.h"
+
 constexpr const size_t WS_DEBUG_MSG_BUFFER = 8;
 
 // -----------------------------------------------------------------------------
@@ -28,32 +30,6 @@ struct ws_ticket_t {
 // -----------------------------------------------------------------------------
 // WS callbacks
 // -----------------------------------------------------------------------------
-
-struct ws_counter_t {
-
-    ws_counter_t() : current(0), start(0), stop(0) {}
-
-    ws_counter_t(uint32_t start, uint32_t stop) :
-        current(start), start(start), stop(stop) {}
-
-    void reset() {
-        current = start;
-    }
-
-    void next() {
-        if (current < stop) {
-            ++current;
-        }
-    }
-
-    bool done() {
-        return (current >= stop);
-    }
-
-    uint32_t current;
-    uint32_t start;
-    uint32_t stop;
-};
 
 struct ws_data_t {
 
@@ -121,7 +97,7 @@ struct ws_data_t {
     const uint32_t client_id;
     const mode_t mode;
     const ws_on_send_callback_list_t& callbacks;
-    ws_counter_t counter;
+    counter_t counter;
 };
 
 // -----------------------------------------------------------------------------

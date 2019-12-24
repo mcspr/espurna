@@ -23,6 +23,8 @@ Copyright (C) 2019 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 #include "tuya_protocol.h"
 #include "tuya_util.h"
 
+#include "libs/Timeouts.h"
+
 namespace Tuya {
 
     constexpr const size_t SERIAL_SPEED { 9600u };
@@ -107,7 +109,7 @@ namespace Tuya {
     Transport tuyaSerial(TUYA_SERIAL);
     std::queue<DataFrame> outputFrames;
 
-    DiscoveryTimeout discoveryTimeout(DISCOVERY_TIMEOUT);
+    timeout_t discoveryTimeout(DISCOVERY_TIMEOUT);
     bool transportDebug = false;
     bool configDone = false;
     bool reportWiFi = false;
