@@ -17,8 +17,9 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #include <float.h>
 
-#include "relay.h"
 #include "broker.h"
+#include "mqtt.h"
+#include "relay.h"
 #include "ws.h"
 
 

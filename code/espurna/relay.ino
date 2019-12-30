@@ -13,8 +13,9 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <functional>
 #include <bitset>
 
-#include "relay.h"
 #include "broker.h"
+#include "mqtt.h"
+#include "relay.h"
 #include "tuya.h"
 #include "ws.h"
 

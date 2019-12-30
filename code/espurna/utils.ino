@@ -7,6 +7,8 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 */
 
 #include "utils.h"
+#include "mqtt.h"
+
 #include "libs/HeapStats.h"
 
 #include <Ticker.h>

@@ -8,9 +8,10 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 
-#include "tuya.h"
-#include "light.h"
 #include "broker.h"
+#include "light.h"
+#include "mqtt.h"
+#include "tuya.h"
 #include "ws.h"
 
 #include <Ticker.h>

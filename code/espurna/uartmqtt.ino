@@ -9,6 +9,8 @@ Adapted by Xose Pérez <xose dot perez at gmail dot com>
 
 #if UART_MQTT_SUPPORT
 
+#include "mqtt.h"
+
 char _uartmqttBuffer[UART_MQTT_BUFFER_SIZE];
 bool _uartmqttNewData = false;
 

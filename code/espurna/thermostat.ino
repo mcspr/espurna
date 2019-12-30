@@ -11,6 +11,7 @@ Copyright (C) 2017 by Dmitry Blinov <dblinov76 at gmail dot com>
 #include <ArduinoJson.h>
 #include <float.h>
 
+#include "mqtt.h"
 #include "relay.h"
 #include "ws.h"
 

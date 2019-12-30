@@ -48,6 +48,8 @@ Raw messages:
 
 #if IR_SUPPORT
 
+#include "mqtt.h"
+#include "light.h"
 #include "relay.h"
 
 #include <IRremoteESP8266.h>

@@ -12,6 +12,7 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <Schedule.h>
 #include <ArduinoJson.h>
 
+#include "mqtt.h"
 #include "light.h"
 #include "ws.h"
 
