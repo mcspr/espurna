@@ -650,29 +650,43 @@ void _lightRestoreSettings() {
 // -----------------------------------------------------------------------------
 
 #if MQTT_SUPPORT
+
+void _lightMqttSubscribeColorCCT(bool use_color, bool use_cct) {
+    if (use_color) {
+        mqttSubscribe(MQTT_TOPIC_COLOR_RGB);
+        mqttSubscribe(MQTT_TOPIC_COLOR_HSV);
+        mqttSubscribe(MQTT_TOPIC_TRANSITION);
+    }
+
+    if (use_color || use_cct) {
+        mqttSubscribe(MQTT_TOPIC_MIRED);
+        mqttSubscribe(MQTT_TOPIC_KELVIN);
+    }
+}
+
+void _lightMqttSubscribe(bool use_color, bool use_cct, String& groupColor) {
+    // Always subscribe to brightness
+    mqttSubscribe(MQTT_TOPIC_BRIGHTNESS);
+
+    // These topics depend on channel configuration
+    _lightMqttSubscribeColorCCT(use_color, use_cct);
+
+    // Allow arbitrary topic to subscribe and send channel data to
+    if (groupColor.length() > 0) {
+        mqttSubscribeRaw(groupColor.c_str());
+    }
+}
+
 void _lightMQTTCallback(unsigned int type, const char * topic, const char * payload) {
 
     String mqtt_group_color = getSetting("mqttGroupColor");
 
     if (type == MQTT_CONNECT_EVENT) {
 
-        mqttSubscribe(MQTT_TOPIC_BRIGHTNESS);
+        // Generic topics to control brightness and all channels at once
+        _lightMqttSubscribe(_light_use_color, _light_use_cct, mqtt_group_color);
 
-        if (_light_use_color) {
-            mqttSubscribe(MQTT_TOPIC_COLOR_RGB);
-            mqttSubscribe(MQTT_TOPIC_COLOR_HSV);
-            mqttSubscribe(MQTT_TOPIC_TRANSITION);
-        }
-
-        if (_light_use_color || _light_use_cct) {
-            mqttSubscribe(MQTT_TOPIC_MIRED);
-            mqttSubscribe(MQTT_TOPIC_KELVIN);
-        }
-
-        // Group color
-        if (mqtt_group_color.length() > 0) mqttSubscribeRaw(mqtt_group_color.c_str());
-
-        // Channels
+        // Note: since channel number can't change at runtime, only subscribe at connection
         char buffer[strlen(MQTT_TOPIC_CHANNEL) + 3];
         snprintf_P(buffer, sizeof(buffer), PSTR("%s/+"), MQTT_TOPIC_CHANNEL);
         mqttSubscribe(buffer);
@@ -1261,40 +1275,74 @@ const unsigned long _light_iofunc[16] PROGMEM = {
 
 void _lightConfigure() {
 
-    _light_use_color = getSetting("useColor", LIGHT_USE_COLOR).toInt() == 1;
-    if (_light_use_color && (_light_channel.size() < 3)) {
-        _light_use_color = false;
-        setSetting("useColor", _light_use_color);
+    // Refresh subscriptions for color & cct to avoid needing reconnection
+    // Only send out subscriptions if changing from off to on
+    bool color_or_cct_changed __attribute__((unused)) = false;
+
+    // Ensure we only enable color mode when have enough channels configured
+    {
+        const bool use_color = (_light_channel_size() >= 3)
+            ? (getSetting("useColor", LIGHT_USE_COLOR).toInt() == 1)
+            : false;
+        if (!use_color && _light_use_color) {
+            setSetting("useColor", _light_use_color);
+        }
+        if (use_color != _light_use_color) {
+            color_or_cct_changed = color_or_cct_changed || use_color;
+            _light_use_color = use_color;
+        }
     }
 
-    _light_use_white = getSetting("useWhite", LIGHT_USE_WHITE).toInt() == 1;
-    if (_light_use_white && (_light_channel.size() < 4) && (_light_channel.size() != 2)) {
-        _light_use_white = false;
-        setSetting("useWhite", _light_use_white);
+    // Can only use white channels in WW, RGBW or RGBWW channel configurations
+    {
+        const bool use_white = ((_light_channel.size() >= 4) || (_light_channel.size() == 2))
+            ? (getSetting("useWhite", LIGHT_USE_WHITE).toInt() == 1)
+            : false;
+        if (!use_white && _light_use_white) {
+            setSetting("useWhite", _light_use_white);
+        }
+        _light_use_white = use_white;
+    }
+
+    // CCT depends on useWhite and having WW or RGBWW channel configurations
+    {
+        const bool use_cct = (use_white && ((_light_channel.size() == 2) || (_light_channel.size() == 5))
+            ? (getSetting("useCCT", LIGHT_USE_CCT).toInt() == 1)
+            : false;
+        if (!use_cct && _light_use_cct) {
+            setSetting("useCCT", _light_use_cct);
+        }
+        if (use_cct != _light_use_cct) {
+            color_or_cct_changed = color_or_cct_changed || use_cct;
+            _light_use_cct = use_cct;
+        }
+    }
+
+    // Customizable min and max for color temperature
+    // https://github.com/xoseperez/espurna/pull/1945
+    if (_light_use_color || _light_use_cct) {
+        _light_cold_mireds = getSetting("lightColdMired", LIGHT_COLDWHITE_MIRED).toInt();
+        _light_warm_mireds = getSetting("lightWarmMired", LIGHT_WARMWHITE_MIRED).toInt();
+        _light_cold_kelvin = (1000000L / _light_cold_mireds);
+        _light_warm_kelvin = (1000000L / _light_warm_mireds);
     }
 
     if (_light_use_color) {
         if (_light_use_white) {
             _light_brightness_func = _lightApplyBrightnessColor;
         } else {
+            // Restores historical behaviour when useWhite is off
             _light_brightness_func = []() { _lightApplyBrightness(3); };
         }
     } else {
         _light_brightness_func = []() { _lightApplyBrightness(); };
     }
 
-    _light_use_cct = getSetting("useCCT", LIGHT_USE_CCT).toInt() == 1;
-    if (_light_use_cct && (((_light_channel.size() < 5) && (_light_channel.size() != 2)) || !_light_use_white)) {
-        _light_use_cct = false;
-        setSetting("useCCT", _light_use_cct);
-    }
-
-    if (_light_use_cct) {
-        _light_cold_mireds = getSetting("lightColdMired", LIGHT_COLDWHITE_MIRED).toInt();
-        _light_warm_mireds = getSetting("lightWarmMired", LIGHT_WARMWHITE_MIRED).toInt();
-        _light_cold_kelvin = (1000000L / _light_cold_mireds);
-        _light_warm_kelvin = (1000000L / _light_warm_mireds);
-    }
+    #if MQTT_SUPPORT
+        if (color_or_cct_changed && mqttConnected()) {
+            _lightMqttSubscribeColorCCT(_light_use_color, _light_use_cct);
+        }
+    #endif // MQTT_SUPPORT
 
     _light_use_gamma = getSetting("useGamma", LIGHT_USE_GAMMA).toInt() == 1;
     _light_use_transitions = getSetting("useTransitions", LIGHT_USE_TRANSITIONS).toInt() == 1;
