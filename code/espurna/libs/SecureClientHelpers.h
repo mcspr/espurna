@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <TimeLib.h>
+
 #if SECURE_CLIENT != SECURE_CLIENT_NONE
 
 #if SECURE_CLIENT == SECURE_CLIENT_BEARSSL
