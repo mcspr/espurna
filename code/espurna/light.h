@@ -25,6 +25,8 @@ namespace Light {
 }
 
 size_t lightChannels();
+bool lightUseColor();
+bool lightUseCCT();
 
 void lightState(unsigned char i, bool state);
 bool lightState(unsigned char i);

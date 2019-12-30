@@ -12,6 +12,7 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <Schedule.h>
 #include <ArduinoJson.h>
 
+#include "light.h"
 #include "ws.h"
 
 bool _ha_enabled = false;
@@ -270,7 +271,7 @@ void _haSendSwitch(unsigned char i, JsonObject& config) {
                 config["rgb_state_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, false);
                 config["rgb_command_topic"] = mqttTopic(MQTT_TOPIC_COLOR_RGB, true);
             }
-            if (lightUseCCT()) {
+            if (lightUseColor() || lightUseCCT()) {
                 config["color_temp_command_topic"] = mqttTopic(MQTT_TOPIC_MIRED, true);
                 config["color_temp_state_topic"] = mqttTopic(MQTT_TOPIC_MIRED, false);
             }
