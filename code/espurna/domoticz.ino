@@ -56,7 +56,7 @@ void _domoticzStatus(unsigned char id, bool status) {
 
 void _domoticzLight(unsigned int idx, const JsonObject& root) {
 
-    if (!lightHasColor()) return;
+    if (!lightUseColor()) return;
 
     JsonObject& color = root["Color"];
     if (!color.success()) return;

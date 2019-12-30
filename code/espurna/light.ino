@@ -48,7 +48,7 @@ std::vector<channel_t> _light_channel;
 
 unsigned char _light_channels = LIGHT_CHANNELS;
 
-bool _light_has_color = false;
+bool _light_use_color = false;
 bool _light_use_white = false;
 bool _light_use_cct = false;
 bool _light_use_gamma = false;
@@ -237,7 +237,7 @@ void _fromLong(unsigned long value, bool brightness) {
 
 void _fromRGB(const char * rgb) {
     // 9 char #........ , 11 char ...,...,...
-    if (!_light_has_color) return;
+    if (!_light_use_color) return;
     if (!rgb || (strlen(rgb) == 0)) return;
 
     // HEX value is always prefixed, like CSS
@@ -270,7 +270,7 @@ void _fromRGB(const char * rgb) {
 //   0 <= S <= 100
 //   0 <= V <= 100
 void _fromHSV(const char * hsv) {
-    if (!_light_has_color) return;
+    if (!_light_use_color) return;
     if (strlen(hsv) == 0) return;
 
     char buf[16] = {0};
@@ -355,7 +355,7 @@ void _lightMiredsCCT(const long kelvin) {
 
 void _fromKelvin(long kelvin) {
 
-    if (!_light_has_color) {
+    if (!_light_use_color) {
         if (!_light_use_cct) return;
         _lightMiredsCCT(kelvin);
         return;
@@ -450,7 +450,7 @@ void _toHSV(char * hsv, size_t len) {
 
 void _toLong(char * color, size_t len, bool target) {
 
-    if (!_light_has_color) return;
+    if (!_light_use_color) return;
 
     snprintf_P(color, len, PSTR("%u,%u,%u"),
         (target ? _light_channel[0].target : _light_channel[0].inputValue),
@@ -531,7 +531,7 @@ unsigned int _toPWM(unsigned int value, bool gamma, bool reverse) {
 
 // Returns a PWM value for the given channel ID
 unsigned int _toPWM(unsigned char id) {
-    bool useGamma = _light_use_gamma && _light_has_color && (id < 3);
+    bool useGamma = _light_use_gamma && _light_use_color && (id < 3);
     return _toPWM(_light_channel[id].current, useGamma, _light_channel[id].reverse);
 }
 
@@ -657,13 +657,13 @@ void _lightMQTTCallback(unsigned int type, const char * topic, const char * payl
 
         mqttSubscribe(MQTT_TOPIC_BRIGHTNESS);
 
-        if (_light_has_color) {
+        if (_light_use_color) {
             mqttSubscribe(MQTT_TOPIC_COLOR_RGB);
             mqttSubscribe(MQTT_TOPIC_COLOR_HSV);
             mqttSubscribe(MQTT_TOPIC_TRANSITION);
         }
 
-        if (_light_has_color || _light_use_cct) {
+        if (_light_use_color || _light_use_cct) {
             mqttSubscribe(MQTT_TOPIC_MIRED);
             mqttSubscribe(MQTT_TOPIC_KELVIN);
         }
@@ -749,7 +749,7 @@ void lightMQTT() {
 
     char buffer[20];
 
-    if (_light_has_color) {
+    if (_light_use_color) {
 
         // Color
         if (getSetting("useCSS", LIGHT_USE_CSS).toInt() == 1) {
@@ -764,7 +764,7 @@ void lightMQTT() {
 
     }
     
-    if (_light_has_color || _light_use_cct) {
+    if (_light_use_color || _light_use_cct) {
       
       // Mireds
       snprintf_P(buffer, sizeof(buffer), PSTR("%d"), _light_mireds);
@@ -815,8 +815,8 @@ size_t lightChannels() {
     return _light_channel.size();
 }
 
-bool lightHasColor() {
-    return _light_has_color;
+bool lightUseColor() {
+    return _light_use_color;
 }
 
 bool lightUseCCT() {
@@ -1002,7 +1002,7 @@ bool _lightWebSocketOnKeyCheck(const char * key, JsonVariant& value) {
 }
 
 void _lightWebSocketStatus(JsonObject& root) {
-    if (_light_has_color) {
+    if (_light_use_color) {
         if (getSetting("useRGB", LIGHT_USE_RGB).toInt() == 1) {
             root["rgb"] = lightColor(true);
         } else {
@@ -1029,7 +1029,7 @@ void _lightWebSocketOnVisible(JsonObject& root) {
 
 void _lightWebSocketOnConnected(JsonObject& root) {
     root["mqttGroupColor"] = getSetting("mqttGroupColor");
-    root["useColor"] = _light_has_color;
+    root["useColor"] = _light_use_color;
     root["useWhite"] = _light_use_white;
     root["useGamma"] = _light_use_gamma;
     root["useTransitions"] = _light_use_transitions;
@@ -1042,7 +1042,7 @@ void _lightWebSocketOnConnected(JsonObject& root) {
 
 void _lightWebSocketOnAction(uint32_t client_id, const char * action, JsonObject& data) {
 
-    if (_light_has_color) {
+    if (_light_use_color) {
         if (strcmp(action, "color") == 0) {
             if (data.containsKey("rgb")) {
                 lightColor(data["rgb"], true);
@@ -1085,7 +1085,7 @@ void _lightWebSocketOnAction(uint32_t client_id, const char * action, JsonObject
 
 void _lightAPISetup() {
 
-    if (_light_has_color) {
+    if (_light_use_color) {
 
         apiRegister(MQTT_TOPIC_COLOR_RGB,
             [](char * buffer, size_t len) {
@@ -1260,10 +1260,10 @@ const unsigned long _light_iofunc[16] PROGMEM = {
 
 void _lightConfigure() {
 
-    _light_has_color = getSetting("useColor", LIGHT_USE_COLOR).toInt() == 1;
-    if (_light_has_color && (_light_channel.size() < 3)) {
-        _light_has_color = false;
-        setSetting("useColor", _light_has_color);
+    _light_use_color = getSetting("useColor", LIGHT_USE_COLOR).toInt() == 1;
+    if (_light_use_color && (_light_channel.size() < 3)) {
+        _light_use_color = false;
+        setSetting("useColor", _light_use_color);
     }
 
     _light_use_white = getSetting("useWhite", LIGHT_USE_WHITE).toInt() == 1;
@@ -1272,7 +1272,7 @@ void _lightConfigure() {
         setSetting("useWhite", _light_use_white);
     }
 
-    if (_light_has_color) {
+    if (_light_use_color) {
         if (_light_use_white) {
             _light_brightness_func = _lightApplyBrightnessColor;
         } else {
